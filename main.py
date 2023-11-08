@@ -67,18 +67,40 @@ def append_metadata_from_path(file_path, result_df=None):
     file_name = os.path.splitext(os.path.basename(file_path))[0]
 
     parts = file_name.split()
-
+    
+    while len(parts) < len(result_df.columns):
+        parts.append(np.nan)
+    
     if len(parts) >= 3:
-       new_row_data = pd.DataFrame(parts).T
-       result_df = pd.concat([result_df, new_row_data], 
-                             ignore_index=True)
-
-       return result_df
+        new_row_data = pd.DataFrame([parts], columns=result_df.columns)  # Utwórz nowy DataFrame z danymi
+        result_df = pd.concat([result_df, new_row_data], ignore_index=True)  # Dodaj nowy wiersz do istniejącego DataFrame
 
     return result_df
+
+
+
+
+
 #%%
 file_paths = glob.glob('data/**')
-
+#%%
 for i in range(len(file_paths)):
     data_df = append_data_from_file(file_paths[i], data_df)
     metadata_df = append_metadata_from_path(file_paths[i], metadata_df)
+
+
+#%%
+append_metadata_from_path(file_paths[1], metadata_df)
+
+
+
+
+
+
+
+
+
+
+
+
+
