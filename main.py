@@ -19,12 +19,12 @@ import scipy.stats
 from itertools import product
 
 #%% Create datasets for inf, data and correlations
-metadata_df = pd.DataFrame(columns=['POMIAR',
-                                    'TYP' ,
-                                    'PARA',
-                                    'BADANY',
-                                    'DATA',
-                                    'CZAS'])
+metadata_df = pd.DataFrame(columns=['TIME',
+                                    'DATE' ,
+                                    'NUMBER',
+                                    'PAIR',
+                                    'TYPE',
+                                    'PARTICIPANT'])
 metadata_df.index.name='Id'
 
 data_df = pd.DataFrame()
@@ -56,41 +56,50 @@ def append_data_from_file(file_path, result_df=None):
         print(f"An error occurred: {e}")
         return result_df
 #%%
-def append_metadata_from_path(file_path, result_df=None):
-    if result_df is None:
-        result_df = pd.DataFrame()
-        
-    if not os.path.exists(file_path):
-        print(f"File '{file_path}' not found.")
-        return result_df
-        
-    file_name = os.path.splitext(os.path.basename(file_path))[0]
+def extract_info_from_path(file_path):
+    
+   if not os.path.exists(file_path):
+       print(f"File '{file_path}' not found.")
+       return None, None, None, None, None, None
+   
+    # Delate file extention
+   file_name = os.path.splitext(os.path.basename(file_path))[0]
+   parts = file_name.split()
+   
+   if len(parts) < 3:
+       return None, None, None, None, None, None
 
-    parts = file_name.split()
+   meas_time = parts[2]  # 22-05-27
+   meas_date = parts[1]  # 2023-08-22
+   meas_num = parts[0][0]  # '2'
+   meas_pair = parts[0][1]  # 'o'
+   meas_type = parts[0][2] # 'r'
+   participant = parts[0][3] # 'k'
+
+   return meas_time, meas_date, meas_num, meas_pair, meas_type, participant 
+
+#meas_time, meas_date, meas_num, meas_pair, meas_type, participant = extract_info_from_path("data\\2ork 2023-08-22 22-05-27.txt")
+#%%
+def append_metadata(result_df=pd.DataFrame(), *args):
+    while len(args) < len(result_df.columns):
+        args += (np.nan,)
     
-    while len(parts) < len(result_df.columns):
-        parts.append(np.nan)
-    
-    if len(parts) >= 3:
-        new_row_data = pd.DataFrame([parts], columns=result_df.columns)  # Utwórz nowy DataFrame z danymi
-        result_df = pd.concat([result_df, new_row_data], ignore_index=True)  # Dodaj nowy wiersz do istniejącego DataFrame
+    new_row_data = pd.DataFrame([args], columns=result_df.columns)
+    result_df = pd.concat([result_df, new_row_data], ignore_index=True)
 
     return result_df
-
-
-
-
 
 #%%
 file_paths = glob.glob('data/**')
 #%%
 for i in range(len(file_paths)):
     data_df = append_data_from_file(file_paths[i], data_df)
-    metadata_df = append_metadata_from_path(file_paths[i], metadata_df)
+    meas_time, meas_date, meas_num, meas_pair, meas_type, participant = extract_info_from_path(file_paths[i])
+    metadata_df = append_metadata(metadata_df, meas_time, meas_date, meas_num, meas_pair, meas_type, participant)
 
 
 #%%
-append_metadata_from_path(file_paths[1], metadata_df)
+
 
 
 
