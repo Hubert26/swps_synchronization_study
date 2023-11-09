@@ -148,6 +148,17 @@ def scatter_plot(tuple_list, info_list_of_lists, title=''):
     )
     display(fig)
    # pio.write_html(fig, f"{title}, RANGE from {start} to {stop}.html")
+#%%
+def calculate_correlation(tuple_list, info_list_of_lists):
+    stop = max(sublist[-1] for sublist in info_list_of_lists)
+    start = min(sublist[-2] for sublist in info_list_of_lists)
+    
+    for i in range(len(tuple_list)):
+        name = ' '.join(map(str, info_list_of_lists[i]))
+        
+        x=tuple_list[i][1],
+        y=tuple_list[i][0],
+        fL = interp1d(x, y, kind='linear')  # 'linear', 'quadratic', 'cubic'
 
 #%%
 file_paths = glob.glob('data/**')
