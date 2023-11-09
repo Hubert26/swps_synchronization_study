@@ -89,8 +89,12 @@ def append_metadata(result_df=pd.DataFrame(), *args):
 
     return result_df
 #%%
-def find_indx(df, *args):
-    search_res = df[(df[args[0]] == args[0]) & (df[args[1]] == args[1]) & (df[args[2]] == args[2]) & (df[args[3]] == args[3])]
+def find_indx(df, **kwargs):
+    search_res = df.copy()
+
+    for column, value in kwargs.items():
+        search_res = search_res[search_res[column] == value]
+    
     return search_res.index.tolist()
     
 #%%
@@ -103,7 +107,7 @@ for i in range(len(file_paths)):
 
 
 #%%
-
+indx = find_indx(metadata_df, NUMBER = meas_num, PAIR = meas_pair, TYPE = meas_type)
 
 
 
