@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
+pio.renderers.default='browser'
 import seaborn as sns
 from IPython.display import display
 import glob
@@ -102,7 +103,7 @@ def find_indx(df, **kwargs):
 
     
 #%%
-def find_serie(df, indx, start=0, stop=100000):
+def find_serie(df, indx, start=0, stop=10000000):
     result = []
     maximum = []
     minimum = []
@@ -134,8 +135,8 @@ def scatter_plot(tuple_list, info_list_of_lists, title=''):
         name = ' '.join(map(str, info_list_of_lists[i]))
         
         fig.add_scatter(
-            x=tuple_list[i][0],
-            y=tuple_list[i][1],
+            x=tuple_list[i][1],
+            y=tuple_list[i][0],
             mode='markers',
             name=name
         )
@@ -146,7 +147,7 @@ def scatter_plot(tuple_list, info_list_of_lists, title=''):
         title=f"{title} RANGE from {start} to {stop}"
     )
     display(fig)
-    #pio.write_html(fig, f"{title}, RANGE from {start} to {stop}.html")
+   # pio.write_html(fig, f"{title}, RANGE from {start} to {stop}.html")
 
 #%%
 file_paths = glob.glob('data/**')
@@ -174,14 +175,11 @@ scatter_plot(serie, info_list_of_lists, title = 'TEST')
 
 #%%
 
-x = [1, 2, 3, 4, 5]
-y = [10, 15, 13, 17, 20]
 
-# Utwórz wykres liniowy
-fig = px.line(x=x, y=y, labels={'x': 'X-Axis', 'y': 'Y-Axis'}, title='Prosty Wykres Liniowy')
 
-# Wyświetl wykres
-fig.show()
+
+
+
 
 
 
