@@ -96,7 +96,25 @@ def find_indx(df, **kwargs):
         search_res = search_res[search_res[column] == value]
     
     return search_res.index.tolist()
+  
+#%%
+def find_serie(df, indx, start=0, stop=100000):
+    result = []
+    maximum = []
     
+    for i in indx:
+        serie = df.loc[i].dropna().astype('int')
+        suma = serie.cumsum()
+        max = suma.iloc[-1]
+        if stop > max:
+            stop = max
+
+        selected_columns = [column for column in suma.index if (start < suma[column]) & (suma[column] < stop)]
+        result.append(serie[selected_columns].values.tolist())
+        result.append(suma[selected_columns].values.tolist())
+        maximum.append(max)
+    
+    return result, maximum
 #%%
 file_paths = glob.glob('data/**')
 
@@ -109,6 +127,8 @@ for i in range(len(file_paths)):
 #%%
 indx = find_indx(metadata_df, NUMBER = meas_num, PAIR = meas_pair, TYPE = meas_type)
 
+#%%
+serie, maximum = find_serie(data_df, indx)
 
 
 
