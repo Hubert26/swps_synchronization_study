@@ -88,10 +88,14 @@ def append_metadata(result_df=pd.DataFrame(), *args):
     result_df = pd.concat([result_df, new_row_data], ignore_index=True)
 
     return result_df
-
+#%%
+def find_indx(df, *args):
+    search_res = df[(df[args[0]] == args[0]) & (df[args[1]] == args[1]) & (df[args[2]] == args[2]) & (df[args[3]] == args[3])]
+    return search_res.index.tolist()
+    
 #%%
 file_paths = glob.glob('data/**')
-#%%
+
 for i in range(len(file_paths)):
     data_df = append_data_from_file(file_paths[i], data_df)
     meas_time, meas_date, meas_num, meas_pair, meas_type, participant = extract_info_from_path(file_paths[i])
