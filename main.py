@@ -7,6 +7,7 @@ Created on Wed Nov  8 10:45:31 2023
 
 import pandas as pd
 import numpy as np
+import copy
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
@@ -151,30 +152,26 @@ def scatter_plot(tuple_list, info_list_of_lists, title=''):
 #   output_file_path = os.path.join("out", f"{title}_RANGE_from_{start}_to_{stop}.html")
 #   pio.write_html(fig, output_file_path)
 #   pio.write_html(fig, output_file_path)
+
 #%%
-def trim(x1, y1, x2, y2):
-    if not x1 or not x2:
-        return [], [], [], []
-
-    # Remove values from x1 that are greater than the last value of x2
-    x1_trimmed = [val for val in x1 if val < x2[-1]]
-
-    # Remove values from x2 that are greater than the last value of x1
-    x2_trimmed = [val for val in x2 if val < x1[-1]]
-
-    # Remove values from x1_trimmed that are less than the first value of x2
-    x1_trimmed = [val for val in x1_trimmed if val > x2[0]]
-
-    # Remove values from x2_trimmed that are less than the first value of x1
-    x2_trimmed = [val for val in x2_trimmed if val > x1[0]]
-
-    # Trim y1 to values corresponding to x1_trimmed
-    y1_trimmed = [y1[x1.index(val)] for val in x1_trimmed]
-
-    # Trim y2 to values corresponding to x2_trimmed
-    y2_trimmed = [y2[x2.index(val)] for val in x2_trimmed]
-
-    return x1_trimmed, y1_trimmed, x2_trimmed, y2_trimmed
+def trim(tuple_list, info_list_of_lists):
+    trimmed_info_list = copy.deepcopy(info_list_of_lists)
+    stop = min(sublist[-1] for sublist in trimmed_info_list)
+    start = max(sublist[-2] for sublist in trimmed_info_list)    
+    trimmed = []
+    
+    for i in range(len(tuple_list)):
+        trimmed_series = [[], []]
+        
+        trimmed_series[1] = [val for val in tuple_list[i][1] if start <= val <= stop]
+        
+        trimmed_series[0] = [tuple_list[i][0][tuple_list[i][1].index(val)] for val in trimmed_series[1]]
+        
+        trimmed.append(trimmed_series)
+        trimmed_info_list[i][-1] = trimmed_series[1][-1]
+        trimmed_info_list[i][-2] = trimmed_series[1][0]
+        
+    return trimmed, trimmed_info_list
 #%%
 def interpolate(x, y, ix, method = 'linear'):
     f = interp1d(x, y, kind=method)
@@ -182,16 +179,18 @@ def interpolate(x, y, ix, method = 'linear'):
     return f(ix)
 #%%
 def calculate_correlation(tuple_list, info_list_of_lists):
-    stop = max(sublist[-1] for sublist in info_list_of_lists)
-    start = min(sublist[-2] for sublist in info_list_of_lists)
-    
-    for i in range(len(tuple_list)):
-        name = ' '.join(map(str, info_list_of_lists[i]))
+    name = []  
+    for i in range(0, len(tuple_list), 2):
+        name[i] = ' '.join(map(str, info_list_of_lists[i]))
+        name[i+1] = ' '.join(map(str, info_list_of_lists[i+1]))
         
-        x=tuple_list[i][1],
-        y=tuple_list[i][0],
-        fL = interp1d(x, y, kind='linear')  # 'linear', 'quadratic', 'cubic'
-
+        x1=tuple_list[i][1]
+        y1=tuple_list[i][0]
+        x2=tuple_list[i+1][1]
+        y2=tuple_list[i+1][0]
+        f1 = interpolate(x1, y1, x2)
+        f2 = interpolate(x2, y2, x1)
+        return 0
 #%%
 file_paths = glob.glob('data/**')
 
@@ -217,8 +216,8 @@ info_list_of_lists = info_df.values.tolist()
 scatter_plot(serie, info_list_of_lists, title = 'TEST')
 
 #%%
-
-
+trimmed, trimmed_info_list_of_lists = trim(serie, info_list_of_lists)
+scatter_plot(trimmed, trimmed_info_list_of_lists, title = 'Trimeed')
 
 
 
