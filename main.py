@@ -172,24 +172,27 @@ def trim(tuple_list, info_list):
         
     return trimmed, trimmed_info_list
 #%%
-def interpolate(x, y, ix, method = 'linear'):
-    f = interp1d(x, y, kind=method)
-    
-    return f(ix)
+def interpolate(x, y, ix, method='linear'):
+    f = interp1d(x, y, kind=method, fill_value='extrapolate')
+    return f(ix).tolist()
 #%%
-def calculate_correlation(tuple_list, info_list_of_lists):
-    name = []  
-    for i in range(0, len(tuple_list), 2):
-        name[i] = ' '.join(map(str, info_list_of_lists[i]))
-        name[i+1] = ' '.join(map(str, info_list_of_lists[i+1]))
-        
-        x1=tuple_list[i][1]
-        y1=tuple_list[i][0]
-        x2=tuple_list[i+1][1]
-        y2=tuple_list[i+1][0]
-        f1 = interpolate(x1, y1, x2)
-        f2 = interpolate(x2, y2, x1)
-        return 0
+def calculate_correlation(tuple_list, info_list):
+    correlation_matrix = np.zeros((len(tuple_list), len(tuple_list)))
+    
+    for i, (x1, y1) in enumerate(tuple_list):
+        for j, (x2, y2) in enumerate(tuple_list):
+            iy1 = interpolate(x1, y1, x2)
+            iy2 = interpolate(x2, y2, x1)
+            
+            sorted_unique_pairs1 = list(set(sorted(zip(x1 + iy1, y1 + iy1))))
+            #second_elements1 = [pair[1] for pair in sorted_unique_pairs1]
+            
+            sorted_unique_pairs2 = list(set(sorted(zip(x2 + iy2, y2 + iy2))))
+            #second_elements2 = [pair[1] for pair in sorted_unique_pairs2]
+            
+            correlation_matrix[i, j] = calculate_correlation(sorted_unique_pairs1, sorted_unique_pairs2)
+    
+    return correlation_matrix
 #%%
 file_paths = glob.glob('data/**')
 
@@ -217,8 +220,10 @@ scatter_plot(serie, info_list, title = 'TEST')
 #%%
 trimmed, trimmed_info_list = trim(serie, info_list)
 scatter_plot(trimmed, trimmed_info_list, title = 'Trimeed')
-
-
+#%%
+len(trimmed)
+#%%
+corr = calculate_correlation(trimmed, trimmed_info_list)
 
 
 
