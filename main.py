@@ -117,7 +117,7 @@ def find_serie(df, indx, start=0, stop=10000000):
         if stop > max:
             stop = max
 
-        selected_columns = [column for column in suma.index if (start < suma[column]) & (suma[column] < stop)]
+        selected_columns = [column for column in suma.index if (start <= suma[column]) & (suma[column] <= stop)]
         result.append((serie[selected_columns].values.tolist(), suma[selected_columns].values.tolist()))
         maximum.append(max)
         minimum.append(min)
@@ -126,14 +126,14 @@ def find_serie(df, indx, start=0, stop=10000000):
 
 
 #%%
-def scatter_plot(tuple_list, info_list_of_lists, title=''):
-    stop = max(sublist[-1] for sublist in info_list_of_lists)
-    start = min(sublist[-2] for sublist in info_list_of_lists)
+def scatter_plot(tuple_list, info_list, title=''):
+    stop = max(sublist[-1] for sublist in info_list)
+    start = min(sublist[-2] for sublist in info_list)
     
     fig = px.scatter()
     
     for i in range(len(tuple_list)):
-        name = ' '.join(map(str, info_list_of_lists[i]))
+        name = ' '.join(map(str, info_list[i]))
         
         fig.add_scatter(
             x=tuple_list[i][1],
@@ -147,15 +147,15 @@ def scatter_plot(tuple_list, info_list_of_lists, title=''):
         yaxis_title="Time Between Heartbeats [ms]",
         title=f"{title} RANGE from {start} to {stop}"
     )
-    display(fig)
+    #display(fig)
     
 #   output_file_path = os.path.join("out", f"{title}_RANGE_from_{start}_to_{stop}.html")
 #   pio.write_html(fig, output_file_path)
 #   pio.write_html(fig, output_file_path)
 
 #%%
-def trim(tuple_list, info_list_of_lists):
-    trimmed_info_list = copy.deepcopy(info_list_of_lists)
+def trim(tuple_list, info_list):
+    trimmed_info_list = copy.deepcopy(info_list)
     stop = min(sublist[-1] for sublist in trimmed_info_list)
     start = max(sublist[-2] for sublist in trimmed_info_list)    
     trimmed = []
@@ -164,12 +164,11 @@ def trim(tuple_list, info_list_of_lists):
         trimmed_series = [[], []]
         
         trimmed_series[1] = [val for val in tuple_list[i][1] if start <= val <= stop]
-        
         trimmed_series[0] = [tuple_list[i][0][tuple_list[i][1].index(val)] for val in trimmed_series[1]]
         
         trimmed.append(trimmed_series)
         trimmed_info_list[i][-1] = trimmed_series[1][-1]
-        trimmed_info_list[i][-2] = trimmed_series[1][0]
+        trimmed_info_list[i][-2] = trimmed_series[1][0] 
         
     return trimmed, trimmed_info_list
 #%%
@@ -210,14 +209,14 @@ serie, minimum, maximum = find_serie(data_df, indx)
 info_df = metadata_df.loc[indx]
 info_df['Min'] = minimum
 info_df['Max'] = maximum
-info_list_of_lists = info_df.values.tolist()
+info_list = info_df.values.tolist()
 
 #%%
-scatter_plot(serie, info_list_of_lists, title = 'TEST')
+scatter_plot(serie, info_list, title = 'TEST')
 
 #%%
-trimmed, trimmed_info_list_of_lists = trim(serie, info_list_of_lists)
-scatter_plot(trimmed, trimmed_info_list_of_lists, title = 'Trimeed')
+trimmed, trimmed_info_list = trim(serie, info_list)
+scatter_plot(trimmed, trimmed_info_list, title = 'Trimeed')
 
 
 
