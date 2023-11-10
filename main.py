@@ -147,7 +147,39 @@ def scatter_plot(tuple_list, info_list_of_lists, title=''):
         title=f"{title} RANGE from {start} to {stop}"
     )
     display(fig)
-   # pio.write_html(fig, f"{title}, RANGE from {start} to {stop}.html")
+    
+#   output_file_path = os.path.join("out", f"{title}_RANGE_from_{start}_to_{stop}.html")
+#   pio.write_html(fig, output_file_path)
+#   pio.write_html(fig, output_file_path)
+#%%
+def trim(x1, y1, x2, y2):
+    if not x1 or not x2:
+        return [], [], [], []
+
+    # Remove values from x1 that are greater than the last value of x2
+    x1_trimmed = [val for val in x1 if val < x2[-1]]
+
+    # Remove values from x2 that are greater than the last value of x1
+    x2_trimmed = [val for val in x2 if val < x1[-1]]
+
+    # Remove values from x1_trimmed that are less than the first value of x2
+    x1_trimmed = [val for val in x1_trimmed if val > x2[0]]
+
+    # Remove values from x2_trimmed that are less than the first value of x1
+    x2_trimmed = [val for val in x2_trimmed if val > x1[0]]
+
+    # Trim y1 to values corresponding to x1_trimmed
+    y1_trimmed = [y1[x1.index(val)] for val in x1_trimmed]
+
+    # Trim y2 to values corresponding to x2_trimmed
+    y2_trimmed = [y2[x2.index(val)] for val in x2_trimmed]
+
+    return x1_trimmed, y1_trimmed, x2_trimmed, y2_trimmed
+#%%
+def interpolate(x, y, ix, method = 'linear'):
+    f = interp1d(x, y, kind=method)
+    
+    return f(ix)
 #%%
 def calculate_correlation(tuple_list, info_list_of_lists):
     stop = max(sublist[-1] for sublist in info_list_of_lists)
