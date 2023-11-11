@@ -20,6 +20,7 @@ import os
 from scipy.interpolate import interp1d
 import scipy.stats
 from itertools import product
+from scipy.stats import pearsonr
 
 #%% Create datasets for inf, data and correlations
 metadata_df = pd.DataFrame(columns=['TIME',
@@ -173,26 +174,28 @@ def trim(tuple_list, info_list):
     return trimmed, trimmed_info_list
 #%%
 def interpolate(x, y, ix, method='linear'):
+    if not isinstance(x, (list, np.ndarray)):
+        x = [x]
+    if not isinstance(y, (list, np.ndarray)):
+        y = [y]
+    
     f = interp1d(x, y, kind=method, fill_value='extrapolate')
     return f(ix).tolist()
 #%%
-def calculate_correlation(tuple_list, info_list):
+def calculate_correlation(tuple_list):
     correlation_matrix = np.zeros((len(tuple_list), len(tuple_list)))
+    p_value_matrix = np.zeros((len(tuple_list), len(tuple_list)))
     
     for i, (x1, y1) in enumerate(tuple_list):
         for j, (x2, y2) in enumerate(tuple_list):
-            iy1 = interpolate(x1, y1, x2)
-            iy2 = interpolate(x2, y2, x1)
+            common_x = list(set(x1) & set(x2))
+            y1_interp = interp1d(x1, y1, kind='linear')(common_x)
+            y2_interp = interp1d(x2, y2, kind='linear')(common_x)
             
-            sorted_unique_pairs1 = list(set(sorted(zip(x1 + iy1, y1 + iy1))))
-            #second_elements1 = [pair[1] for pair in sorted_unique_pairs1]
-            
-            sorted_unique_pairs2 = list(set(sorted(zip(x2 + iy2, y2 + iy2))))
-            #second_elements2 = [pair[1] for pair in sorted_unique_pairs2]
-            
-            correlation_matrix[i, j] = calculate_correlation(sorted_unique_pairs1, sorted_unique_pairs2)
+            correlation_matrix[i, j], p_value_matrix[i, j] = pearsonr(y1_interp, y2_interp)
     
-    return correlation_matrix
+    return correlation_matrix, p_value_matrix
+
 #%%
 file_paths = glob.glob('data/**')
 
@@ -223,7 +226,7 @@ scatter_plot(trimmed, trimmed_info_list, title = 'Trimeed')
 #%%
 len(trimmed)
 #%%
-corr = calculate_correlation(trimmed, trimmed_info_list)
+correlation_matrix, p_value_matrix = calculate_correlation(trimmed)
 
 
 
