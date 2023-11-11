@@ -28,17 +28,14 @@ metadata_df = pd.DataFrame(columns=['TIME',
                                     'NUMBER',
                                     'PAIR',
                                     'TYPE',
-                                    'PARTICIPANT'])
+                                    'PARTICIPANT',
+                                    'MIN',
+                                    'MAX'])
 metadata_df.index.name='Id'
 
 data_df = pd.DataFrame()
 data_df.index.name='Id'
 
-correlation_coefficients = pd.DataFrame(columns=['correlation_iyA_yL',
-                                                 'p_values__iyA_yL',
-                                                 'correlation_iyL_yA',
-                                                 'p_values__iyL_yA'])
-correlation_coefficients.index.name='Id'
 #%%
 def append_data_from_file(file_path, result_df=None):
     if result_df is None:
@@ -95,6 +92,8 @@ def append_metadata(result_df=pd.DataFrame(), *args):
 #%%
 def find_indx(df, **kwargs):
     search_res = df.copy()
+    if not kwargs:
+        return search_res.index.tolist()
 
     for column, value in kwargs.items():
         search_res = search_res[search_res[column] == value]
@@ -103,7 +102,6 @@ def find_indx(df, **kwargs):
   
 #%%
 
-    
 #%%
 def find_serie(df, indx, start=0, stop=10000000):
     result = []
@@ -182,7 +180,7 @@ def interpolate(x, y, ix, method='linear'):
     f = interp1d(x, y, kind=method, fill_value='extrapolate')
     return f(ix).tolist()
 #%%
-def calculate_correlation(tuple_list):
+def calculate_correlation(tuple_list, info_list):
     correlation_matrix = np.zeros((len(tuple_list), len(tuple_list)))
     p_value_matrix = np.zeros((len(tuple_list), len(tuple_list)))
     
@@ -197,39 +195,67 @@ def calculate_correlation(tuple_list):
     return correlation_matrix, p_value_matrix
 
 #%%
+def create_correlation_dataframes(correlation_matrix, p_value_matrix, info_list):
+    info_strings = ["_".join(map(str, info)) for info in info_list]
+    
+    correlation_df = pd.DataFrame(correlation_matrix, columns=info_strings, index=info_strings)
+    p_value_df = pd.DataFrame(p_value_matrix, columns=info_strings, index=info_strings)
+    return correlation_df, p_value_df
+#%%
+def matrix_heatmap(df, title='', color='viridis'):
+    mask = np.zeros_like(df.corr().round(2), dtype=bool)
+    mask[np.triu_indices_from(mask)] = True
+    with sns.axes_style("white"):
+        f, ax = plt.subplots(figsize=(10, 10))
+        cmap = sns.color_palette(color)
+        sns.heatmap(df.corr(),
+                    annot=df.corr().round(2),
+                    mask=mask,
+                    vmax=.3,
+                    square=True,
+                    xticklabels=df.columns,
+                    yticklabels=df.columns,
+                    cmap=cmap,
+                    linewidths=.5,
+                    cbar_kws={"shrink": 0.7})
+    plt.title(title)
+    #output_path = 'out/heatmap.png'
+    #plt.savefig(output_path)
+#%%
 file_paths = glob.glob('data/**')
 
 for i in range(len(file_paths)):
     data_df = append_data_from_file(file_paths[i], data_df)
     meas_time, meas_date, meas_num, meas_pair, meas_type, participant = extract_info_from_path(file_paths[i])
-    metadata_df = append_metadata(metadata_df, meas_time, meas_date, meas_num, meas_pair, meas_type, participant)
-
+    metadata_df = append_metadata(metadata_df,
+                                  meas_time,
+                                  meas_date,
+                                  meas_num,
+                                  meas_pair,
+                                  meas_type,
+                                  participant,
+                                  data_df.iloc[i].dropna().astype(int).cumsum().min(),
+                                  data_df.iloc[i].dropna().astype(int).cumsum().max())
 
 #%%
-indx = find_indx(metadata_df, NUMBER = meas_num, PAIR = meas_pair, TYPE = meas_type)
-
-#%%
+indx = find_indx(metadata_df, NUMBER = '2', PAIR = 'o', TYPE = 'r')
 serie, minimum, maximum = find_serie(data_df, indx)
-
-#%%
-info_df = metadata_df.loc[indx]
-info_df['Min'] = minimum
-info_df['Max'] = maximum
-info_list = info_df.values.tolist()
+info_list = metadata_df.loc[indx].values.tolist()
 
 #%%
 scatter_plot(serie, info_list, title = 'TEST')
 
 #%%
-trimmed, trimmed_info_list = trim(serie, info_list)
-scatter_plot(trimmed, trimmed_info_list, title = 'Trimeed')
+trimmed_serie, trimmed_info_list = trim(serie, info_list)
+#scatter_plot(trimmed_serie, trimmed_info_list, title = 'Trimeed')
 #%%
-len(trimmed)
+
 #%%
-correlation_matrix, p_value_matrix = calculate_correlation(trimmed)
-
-
-
+correlation_matrix, p_value_matrix = calculate_correlation(trimmed_serie, info_list)
+correlation_df, p_value_df = create_correlation_dataframes(correlation_matrix, p_value_matrix, info_list)
+#%%
+#matrix_heatmap(correlation_df, "corr")
+#matrix_heatmap(p_value_df, "p_value")
 
 
 
