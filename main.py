@@ -103,25 +103,32 @@ def find_indx(df, **kwargs):
 #%%
 
 #%%
-def find_serie(df, indx, start=0, stop=10000000):
-    result = []
-    maximum = []
-    minimum = []
+def create_serie(df_data, df_info, indx, start=0, stop=10000000):
+    data_list = []
+    min_list = []
+    max_list = []
     
+    info_list = df_info.loc[indx].values.tolist()
     for i in indx:
-        serie = df.loc[i].dropna().astype('int')
-        suma = serie.cumsum()
-        max = suma.iloc[-1]
-        min = suma.iloc[0]
-        if stop > max:
-            stop = max
+        hr_values = df_data.loc[i].dropna().astype('int')
+        research_time = hr_values.cumsum()
+        research_time_max = research_time.iloc[-1]
+        research_time_min = research_time.iloc[0]
+        
+        if stop > research_time_max:
+            stop = research_time_max
 
-        selected_columns = [column for column in suma.index if (start <= suma[column]) & (suma[column] <= stop)]
-        result.append((serie[selected_columns].values.tolist(), suma[selected_columns].values.tolist()))
-        maximum.append(max)
-        minimum.append(min)
+        selected_columns = [column for column in research_time.index if (start <= research_time[column]) & (research_time[column] <= stop)]
+        
+        data_list.append((hr_values[selected_columns].values.tolist(), research_time[selected_columns].values.tolist()))
+        min_list.append(research_time_min)
+        max_list.append(research_time_max)
     
-    return result, minimum, maximum
+    for sublista, min_value, max_value in zip(info_list, min_list, max_list):
+        sublista.extend([min_value, max_value])
+    
+    return data_list, info_list
+
 
 
 #%%
@@ -222,6 +229,14 @@ def matrix_heatmap(df, title='', color='viridis'):
     #output_path = 'out/heatmap.png'
     #plt.savefig(output_path)
 #%%
+
+
+
+
+
+
+
+#%%
 file_paths = glob.glob('data/**')
 
 for i in range(len(file_paths)):
@@ -239,20 +254,19 @@ for i in range(len(file_paths)):
 
 #%%
 indx = find_indx(metadata_df, NUMBER = '2', PAIR = 'o', TYPE = 'r')
-serie, minimum, maximum = find_serie(data_df, indx)
-info_list = metadata_df.loc[indx].values.tolist()
+serie_list, serie_info_list = create_serie(data_df, metadata_df, indx)
+
 
 #%%
-scatter_plot(serie, info_list, title = 'TEST')
+scatter_plot(serie_list, serie_info_list, title = 'TEST')
 
 #%%
-trimmed_serie, trimmed_info_list = trim(serie, info_list)
+trimmed_serie, trimmed_info_list = trim(serie_list, serie_info_list)
 #scatter_plot(trimmed_serie, trimmed_info_list, title = 'Trimeed')
-#%%
 
 #%%
-correlation_matrix, p_value_matrix = calculate_correlation(trimmed_serie, info_list)
-correlation_df, p_value_df = create_correlation_dataframes(correlation_matrix, p_value_matrix, info_list)
+correlation_matrix, p_value_matrix = calculate_correlation(trimmed_serie, trimmed_info_list)
+correlation_df, p_value_df = create_correlation_dataframes(correlation_matrix, p_value_matrix, trimmed_info_list)
 #%%
 #matrix_heatmap(correlation_df, "corr")
 #matrix_heatmap(p_value_df, "p_value")
