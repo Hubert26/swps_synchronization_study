@@ -232,12 +232,8 @@ def matrix_heatmap(df, title='', color='viridis'):
     #output_path = 'out/heatmap.png'
     #plt.savefig(output_path)
 #%%
-
-
-
-
-
-
+def fisher_transform(r):
+    return 0.5 * np.log((1 + r) / (1 - r))
 
 #%%
 file_paths = glob.glob('data/**')
@@ -248,15 +244,17 @@ for i in range(len(file_paths)):
 
 
 #%%
-indx = find_indx(metadata_df, NUMBER = '2', PAIR = 'o', TYPE = 'r')
-series_list, series_info_list = create_serie(data_df, metadata_df, indx)
+#indx = find_indx(metadata_df, NUMBER = '2', PAIR = 'o', TYPE = 'r')
+indx = find_indx(metadata_df, NUMBER = '1',TYPE = 'r')
+r_1_series_list, r_1_series_info_list = create_serie(data_df, metadata_df, indx)
 
+indx = find_indx(metadata_df, NUMBER = '2',TYPE = 'r')
+r_2_series_list, r_2_series_info_list = create_serie(data_df, metadata_df, indx)
+#%%
+scatter_plot(r_1_series_list, r_1_series_info_list, title = 'TEST')
 
 #%%
-scatter_plot(series_list, series_info_list, title = 'TEST')
-
-#%%
-trimmed_series_list, trimmed_info_list = trim(series_list, series_info_list)
+trimmed_series_list, trimmed_info_list = trim(r_1_series_list, r_1_series_info_list)
 #scatter_plot(trimmed_serie, trimmed_info_list, title = 'Trimeed')
 
 #%%
