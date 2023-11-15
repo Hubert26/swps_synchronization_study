@@ -155,23 +155,31 @@ def scatter_plot(tuple_list, info_list, title=''):
 #   pio.write_html(fig, output_file_path)
 
 #%%
-def trim(tuple_list, info_list):
+def trim(series_list, info_list, start=None, stop=None):
     trimmed_info_list = copy.deepcopy(info_list)
-    stop = min(sublist[-1] for sublist in trimmed_info_list)
-    start = max(sublist[-2] for sublist in trimmed_info_list)    
-    trimmed = []
     
-    for i in range(len(tuple_list)):
+    max_start = max(sublist[-2] for sublist in trimmed_info_list)
+    min_stop = min(sublist[-1] for sublist in trimmed_info_list)
+    
+    if start is None or start < max_start:
+        start = max_start
+    
+    if stop is None or stop > min_stop:
+        stop = min_stop
+        
+    trimmed_series_list = []
+    
+    for i in range(len(series_list)):
         trimmed_series = [[], []]
         
-        trimmed_series[1] = [val for val in tuple_list[i][1] if start <= val <= stop]
-        trimmed_series[0] = [tuple_list[i][0][tuple_list[i][1].index(val)] for val in trimmed_series[1]]
+        trimmed_series[1] = [val for val in series_list[i][1] if start <= val <= stop]
+        trimmed_series[0] = [series_list[i][0][series_list[i][1].index(val)] for val in trimmed_series[1]]
         
-        trimmed.append(trimmed_series)
+        trimmed_series_list.append(trimmed_series)
         trimmed_info_list[i][-1] = trimmed_series[1][-1]
         trimmed_info_list[i][-2] = trimmed_series[1][0] 
         
-    return trimmed, trimmed_info_list
+    return trimmed_series_list, trimmed_info_list
 #%%
 def interpolate(x, y, ix, method='linear'):
     if not isinstance(x, (list, np.ndarray)):
@@ -241,18 +249,18 @@ for i in range(len(file_paths)):
 
 #%%
 indx = find_indx(metadata_df, NUMBER = '2', PAIR = 'o', TYPE = 'r')
-serie_list, serie_info_list = create_serie(data_df, metadata_df, indx)
+series_list, series_info_list = create_serie(data_df, metadata_df, indx)
 
 
 #%%
-scatter_plot(serie_list, serie_info_list, title = 'TEST')
+scatter_plot(series_list, series_info_list, title = 'TEST')
 
 #%%
-trimmed_serie, trimmed_info_list = trim(serie_list, serie_info_list)
+trimmed_series_list, trimmed_info_list = trim(series_list, series_info_list)
 #scatter_plot(trimmed_serie, trimmed_info_list, title = 'Trimeed')
 
 #%%
-correlation_matrix, p_value_matrix = calculate_correlation(trimmed_serie, trimmed_info_list)
+correlation_matrix, p_value_matrix = calculate_correlation(trimmed_series_list, trimmed_info_list)
 correlation_df, p_value_df = create_correlation_dataframes(correlation_matrix, p_value_matrix, trimmed_info_list)
 #%%
 #matrix_heatmap(correlation_df, "corr")
