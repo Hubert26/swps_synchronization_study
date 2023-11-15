@@ -29,15 +29,14 @@ metadata_df = pd.DataFrame(columns=['TIME',
                                     'PAIR',
                                     'TYPE',
                                     'PARTICIPANT',
-                                    'MIN',
-                                    'MAX'])
+                                    ])
 metadata_df.index.name='Id'
 
 data_df = pd.DataFrame()
 data_df.index.name='Id'
 
 #%%
-def append_data_from_file(file_path, result_df=None):
+def extract_data_from_file(file_path, result_df=None):
     if result_df is None:
         result_df = pd.DataFrame()
 
@@ -56,8 +55,18 @@ def append_data_from_file(file_path, result_df=None):
     except Exception as e:
         print(f"An error occurred: {e}")
         return result_df
+    
 #%%
-def extract_info_from_path(file_path):
+def append_data_to_df(result_df=pd.DataFrame(), *args):
+    while len(args) < len(result_df.columns):
+        args += (np.nan,)
+    
+    new_row_data = pd.DataFrame([args], columns=result_df.columns)
+    result_df = pd.concat([result_df, new_row_data], ignore_index=True)
+
+    return result_df
+#%%
+def extract_info_from_path(file_path, result_df=None):
     
    if not os.path.exists(file_path):
        print(f"File '{file_path}' not found.")
@@ -77,18 +86,10 @@ def extract_info_from_path(file_path):
    meas_type = parts[0][2] # 'r'
    participant = parts[0][3] # 'k'
 
-   return meas_time, meas_date, meas_num, meas_pair, meas_type, participant 
+   return append_data_to_df(result_df, meas_time, meas_date, meas_num, meas_pair, meas_type, participant) 
 
 #meas_time, meas_date, meas_num, meas_pair, meas_type, participant = extract_info_from_path("data\\2ork 2023-08-22 22-05-27.txt")
-#%%
-def append_metadata(result_df=pd.DataFrame(), *args):
-    while len(args) < len(result_df.columns):
-        args += (np.nan,)
-    
-    new_row_data = pd.DataFrame([args], columns=result_df.columns)
-    result_df = pd.concat([result_df, new_row_data], ignore_index=True)
 
-    return result_df
 #%%
 def find_indx(df, **kwargs):
     search_res = df.copy()
@@ -103,7 +104,7 @@ def find_indx(df, **kwargs):
 #%%
 
 #%%
-def create_serie(df_data, df_info, indx, start=0, stop=10000000):
+def create_serie(df_data, df_info, indx):
     data_list = []
     min_list = []
     max_list = []
@@ -114,22 +115,16 @@ def create_serie(df_data, df_info, indx, start=0, stop=10000000):
         research_time = hr_values.cumsum()
         research_time_max = research_time.iloc[-1]
         research_time_min = research_time.iloc[0]
-        
-        if stop > research_time_max:
-            stop = research_time_max
-
-        selected_columns = [column for column in research_time.index if (start <= research_time[column]) & (research_time[column] <= stop)]
-        
-        data_list.append((hr_values[selected_columns].values.tolist(), research_time[selected_columns].values.tolist()))
+                
+        data_list.append((hr_values.values.tolist(), research_time.values.tolist()))
         min_list.append(research_time_min)
         max_list.append(research_time_max)
     
-    for sublista, min_value, max_value in zip(info_list, min_list, max_list):
-        sublista.extend([min_value, max_value])
+    new_values = list(zip(min_list, max_list))
+    for info, (research_time_min, research_time_max) in zip(info_list, new_values):
+        info.extend([research_time_min, research_time_max])
     
     return data_list, info_list
-
-
 
 #%%
 def scatter_plot(tuple_list, info_list, title=''):
@@ -240,17 +235,9 @@ def matrix_heatmap(df, title='', color='viridis'):
 file_paths = glob.glob('data/**')
 
 for i in range(len(file_paths)):
-    data_df = append_data_from_file(file_paths[i], data_df)
-    meas_time, meas_date, meas_num, meas_pair, meas_type, participant = extract_info_from_path(file_paths[i])
-    metadata_df = append_metadata(metadata_df,
-                                  meas_time,
-                                  meas_date,
-                                  meas_num,
-                                  meas_pair,
-                                  meas_type,
-                                  participant,
-                                  data_df.iloc[i].dropna().astype(int).cumsum().min(),
-                                  data_df.iloc[i].dropna().astype(int).cumsum().max())
+    data_df = extract_data_from_file(file_paths[i], data_df)
+    metadata_df = extract_info_from_path(file_paths[i], metadata_df)
+
 
 #%%
 indx = find_indx(metadata_df, NUMBER = '2', PAIR = 'o', TYPE = 'r')
