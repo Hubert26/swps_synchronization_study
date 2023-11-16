@@ -189,6 +189,22 @@ def interpolate(x, y, ix, method='linear'):
     
     f = interp1d(x, y, kind=method, fill_value='extrapolate')
     return f(ix).tolist()
+
+#%%
+def shift_series(series_list, info_list, shift_time):
+    shifted_info_list = copy.deepcopy(info_list)
+    
+    shifted_series_list = []
+    
+    for i in range(len(series_list)):
+        shifted_series = [[], []]
+        shifted_series[1] = [x + shift_time for x in series_list[i][1]]
+        shifted_series[0] = series_list[i][0]
+        
+        shifted_series_list.append(shifted_series)
+        shifted_info_list[i][-1] = shifted_series[1][-1]
+        shifted_info_list[i][-2] = shifted_series[1][0]
+    return shifted_series_list, shifted_info_list
 #%%
 def calculate_correlation(tuple_list, info_list):
     correlation_matrix = np.zeros((len(tuple_list), len(tuple_list)))
@@ -264,7 +280,8 @@ correlation_df, p_value_df = create_correlation_dataframes(correlation_matrix, p
 #matrix_heatmap(correlation_df, "corr")
 #matrix_heatmap(p_value_df, "p_value")
 
-
+#%%
+r_1_shift1000_series_list, r_1_shift1000_series_info_list = shift_series(r_1_series_list, r_1_series_info_list,1000)
 
 
 
