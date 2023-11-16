@@ -21,7 +21,8 @@ from scipy.interpolate import interp1d
 import scipy.stats
 from itertools import product
 from scipy.stats import pearsonr
-
+from collections import OrderedDict
+import re
 #%% Create datasets for inf, data and correlations
 metadata_df = pd.DataFrame(columns=['TIME',
                                     'DATE' ,
@@ -252,6 +253,44 @@ def fisher_transform(r):
     return 0.5 * np.log((1 + r) / (1 - r))
 
 #%%
+def find_correlation_pairs(correlation_df, min_corr, max_corr):
+    corr_pairs = correlation_df[(abs(correlation_df) > min_corr) & (abs(correlation_df) < max_corr)]
+
+    corr_pairs_df = pd.DataFrame(columns=['column1', 'column2', 'correlation'])
+
+    added_pairs = []
+
+    for index, column in corr_pairs.stack().items():
+        if not pd.isna(column):
+            pair = (index[0], index[1])
+            reverse_pair = (index[1], index[0])
+
+            if pair not in added_pairs and reverse_pair not in added_pairs:
+                temp_df = pd.DataFrame({'column1': [index[0]], 'column2': [index[1]], 'correlation': [column]})
+                added_pairs.append(pair)
+                corr_pairs_df = pd.concat([corr_pairs_df, temp_df], ignore_index=True)
+
+    return corr_pairs_df
+#%% -??????????????????
+def find_bests_correlations(correlation_df, p_value_df):
+    tmp_df = copy.deepcopy(correlation_df)
+    column_names = correlation_df.columns
+    meas_names = [column_name[:27] for column_name in column_names]
+    unique_meas_names = list(OrderedDict.fromkeys(meas_names))
+    result_df = pd.DataFrame(columns=['MEASURE_1', 'MEASURE_2', 'corr', 'p_value'])
+    
+    for meas_name in unique_meas_names:
+        pattern = re.compile(rf'{re.escape(meas_name)}\w+')
+        filtered_columns = list(filter(pattern.search, correlation_df.columns))
+        index_names = list(set(column_names) - set(filtered_columns))
+        for indx in index_names:
+            max_column_name = tmp_df[indx].idxmax()
+            corr = correlation_df.at[indx, max_column_name]
+            p_value = p_value_df.at[indx, max_column_name]
+            result_df = pd.concat([result_df, pd.DataFrame({'MEASURE_1': [meas_name], 'MEASURE_2': [indx], 'corr': [corr], 'p_value': [p_value]})], ignore_index=True)
+           
+    return result_df
+#%%
 file_paths = glob.glob('data/**')
 
 for i in range(len(file_paths)):
@@ -266,24 +305,29 @@ r_1_series_list, r_1_series_info_list = create_serie(data_df, metadata_df, indx)
 
 indx = find_indx(metadata_df, NUMBER = '2',TYPE = 'r')
 r_2_series_list, r_2_series_info_list = create_serie(data_df, metadata_df, indx)
-#%%
-scatter_plot(r_1_series_list, r_1_series_info_list, title = 'TEST')
-
-#%%
-trimmed_series_list, trimmed_info_list = trim(r_1_series_list, r_1_series_info_list)
-#scatter_plot(trimmed_serie, trimmed_info_list, title = 'Trimeed')
-
-#%%
-correlation_matrix, p_value_matrix = calculate_correlation(trimmed_series_list, trimmed_info_list)
-correlation_df, p_value_df = create_correlation_dataframes(correlation_matrix, p_value_matrix, trimmed_info_list)
-#%%
-#matrix_heatmap(correlation_df, "corr")
-#matrix_heatmap(p_value_df, "p_value")
 
 #%%
 r_1_shift1000_series_list, r_1_shift1000_series_info_list = shift_series(r_1_series_list, r_1_series_info_list,1000)
 
 
+#%%
+trimmed_series_list, trimmed_info_list = trim(r_1_series_list + r_1_shift1000_series_list, r_1_series_info_list + r_1_shift1000_series_info_list)
+#scatter_plot(trimmed_serie, trimmed_info_list, title = 'Trimeed')
+
+#%%
+correlation_matrix, p_value_matrix = calculate_correlation(trimmed_series_list, trimmed_info_list)
+correlation_df, p_value_df = create_correlation_dataframes(correlation_matrix, p_value_matrix, r_1_series_info_list + r_1_shift1000_series_info_list)
+#%%
+corr_pairs = find_correlation_pairs(correlation_df, 0.0, 1)
+
+#%%
+nazwy_pomiarów = find_bests_correlations(correlation_df, p_value_df)
+#%%
+#matrix_heatmap(correlation_df, "corr")
+#matrix_heatmap(p_value_df, "p_value")
+
+#%%
+#scatter_plot(r_1_series_list, r_1_series_info_list, title = 'TEST')
 
 
 
