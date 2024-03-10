@@ -10,16 +10,12 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 import plotly.express as px
-import plotly.graph_objects as go
 import plotly.io as pio
 pio.renderers.default='browser'
 import seaborn as sns
-from IPython.display import display
 import glob
 import os
 from scipy.interpolate import interp1d
-import scipy.stats
-from itertools import product
 from scipy.stats import pearsonr
 from collections import OrderedDict
 import re
