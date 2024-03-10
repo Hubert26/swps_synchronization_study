@@ -92,13 +92,43 @@ def scatter_plot(df, title=''):
     )
     # display(fig)
     
-    output_file_path = os.path.join("out", f"{name}_RANGE_from_{start}_to_{stop}.html")
-    pio.write_html(fig, output_file_path)
-    pio.write_html(fig, output_file_path)
+# =============================================================================
+#     output_file_path = os.path.join("out", f"{name}_RANGE_from_{start}_to_{stop}.html")
+#     pio.write_html(fig, output_file_path)
+#     pio.write_html(fig, output_file_path)
+# =============================================================================
 
-
-
-
+#%%
+def rename_index(df, idx, part, new_name):
+    index_parts = df.index[idx].split()
+    index_parts[part] = new_name
+        
+    new_index = list(df.index)
+    new_index[idx] = ' '.join(index_parts)
+    df.index = new_index
+    
+#%%
+def trim(df, start=None, stop=None):
+    
+    max_start = max(df['x'].apply(lambda arr: arr[0]))
+    min_stop = min(df['x'].apply(lambda arr: arr[-1]))
+    
+    if start is None or start < max_start:
+        start = max_start
+    
+    if stop is None or stop > min_stop:
+        stop = min_stop
+        
+    
+    for i in range(df.shape[0]):
+        x=df.iloc[i]['x']
+        y=df.iloc[i]['y']
+        selected_indices_x = np.where((x >= start) & (x <= stop))[0]
+        df.iloc[i]['x'] = x[selected_indices_x]
+        df.iloc[i]['y'] = y[selected_indices_x]
+        rename_index(df, i, 1, str(df.iloc[i]['x'][0]) + '_' + str(df.iloc[i]['x'][-1]))
+        
+    return df
 
 #%%
 data_df = pd.DataFrame()
@@ -109,11 +139,15 @@ for i in range(len(file_paths)):
     data_df = extract_data_from_file(file_paths[i], data_df)
 
 #%%
-#filtered_df = data_df[data_df.index.str.contains('1rk1 |1rm1 ', regex=True)]
+filtered_df = data_df[data_df.index.str.contains('1rk1 |1rm1 ', regex=True)]
 
 #%%
-for i in range(data_df.shape[0]):
-    scatter_plot(data_df.iloc[i:i+1])
+timmed_df = trim(filtered_df, 2000, 5000)
+#%%
+# =============================================================================
+# for i in range(data_df.shape[0]):
+#     scatter_plot(data_df.iloc[i:i+1])
+# =============================================================================
 
 #%%
 
