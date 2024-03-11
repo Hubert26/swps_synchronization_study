@@ -19,6 +19,7 @@ from scipy.interpolate import interp1d
 from scipy.stats import pearsonr
 from collections import OrderedDict
 import re
+from IPython.display import display
 
 
 #%%
@@ -90,7 +91,7 @@ def scatter_plot(df, title=''):
         yaxis_title="Time Between Heartbeats [ms]",
         title=f"{name} RANGE from {start} to {stop}"
     )
-    # display(fig)
+    display(fig)
     
 # =============================================================================
 #     output_file_path = os.path.join("out", f"{name}_RANGE_from_{start}_to_{stop}.html")
@@ -109,9 +110,9 @@ def rename_index(df, idx, part, new_name):
     
 #%%
 def trim(df, start=None, stop=None):
-    
-    max_start = max(df['x'].apply(lambda arr: arr[0]))
-    min_stop = min(df['x'].apply(lambda arr: arr[-1]))
+    df_copy = df.copy()
+    max_start = max(df_copy['x'].apply(lambda arr: arr[0]))
+    min_stop = min(df_copy['x'].apply(lambda arr: arr[-1]))
     
     if start is None or start < max_start:
         start = max_start
@@ -120,16 +121,72 @@ def trim(df, start=None, stop=None):
         stop = min_stop
         
     
-    for i in range(df.shape[0]):
-        x=df.iloc[i]['x']
-        y=df.iloc[i]['y']
+    for i in range(df_copy.shape[0]):
+        x=df_copy.iloc[i]['x']
+        y=df_copy.iloc[i]['y']
         selected_indices_x = np.where((x >= start) & (x <= stop))[0]
-        df.iloc[i]['x'] = x[selected_indices_x]
-        df.iloc[i]['y'] = y[selected_indices_x]
-        rename_index(df, i, 1, str(df.iloc[i]['x'][0]) + '_' + str(df.iloc[i]['x'][-1]))
+        df_copy.iloc[i]['x'] = x[selected_indices_x]
+        df_copy.iloc[i]['y'] = y[selected_indices_x]
+        rename_index(df_copy, i, 1, str(df_copy.iloc[i]['x'][0]) + '_' + str(df_copy.iloc[i]['x'][-1]))
         
-    return df
+    return df_copy
 
+#%%
+def interpolate(x, y, ix, method='linear'):
+    if not isinstance(x, (list, np.ndarray)):
+        x = [x]
+    if not isinstance(y, (list, np.ndarray)):
+        y = [y]
+    
+    f = interp1d(x, y, kind=method, fill_value='extrapolate')
+    return f(ix).tolist()
+#%%
+def shift_series(df, shift_time):
+    df_copy = df.copy()
+    for i in range(df_copy.shape[0]):
+        df_copy.iloc[i]['x']+=shift_time
+        rename_index(df_copy, i, 1, str(df_copy.iloc[i]['x'][0]) + '_' + str(df_copy.iloc[i]['x'][-1]))
+    return df_copy
+
+#%%
+def fisher_transform(r):
+    if r == 1:
+        return np.inf
+    elif r == -1: 
+        return -np.inf
+    return round(0.5 * np.log((1 + r) / (1 - r)),4)
+
+#%%
+def calculate_correlations(df):
+    df = trim(df)
+    n_rows = df.shape[0]
+    correlation_matrix = np.empty((n_rows, n_rows))
+    p_value_matrix = np.empty((n_rows, n_rows))
+    
+    # Pobranie nazw kolumn i indeksów
+    index_names = df.index.values
+    column_names = df.index.values
+    
+    for i, row1 in enumerate(df.iterrows()):
+        _, data1 = row1
+        x1, y1 = data1['x'], data1['y']
+        
+        for j, row2 in enumerate(df.iterrows()):
+            _, data2 = row2
+            x2, y2 = data2['x'], data2['y']
+            
+            common_x = np.union1d(x1, x2)
+            y1_interp = interp1d(x1, y1, kind='linear', fill_value='extrapolate')(common_x)
+            y2_interp = interp1d(x2, y2, kind='linear', fill_value='extrapolate')(common_x)
+            
+            correlation, p_value = pearsonr(y1_interp, y2_interp)
+            correlation_matrix[i, j] = round(correlation,4)
+            p_value_matrix[i, j] = round(p_value,4)
+            
+    correlation_df = pd.DataFrame(correlation_matrix, index=index_names, columns=column_names)
+    p_value_df = pd.DataFrame(p_value_matrix, index=index_names, columns=column_names)
+    
+    return correlation_df, p_value_df
 #%%
 data_df = pd.DataFrame()
 #%%
@@ -139,10 +196,37 @@ for i in range(len(file_paths)):
     data_df = extract_data_from_file(file_paths[i], data_df)
 
 #%%
-filtered_df = data_df[data_df.index.str.contains('1rk1 |1rm1 ', regex=True)]
+# =============================================================================
+# filtered_df = data_df[data_df.index.str.contains('1rk1 |1rm1 ', regex=True)]
+# =============================================================================
 
 #%%
-timmed_df = trim(filtered_df, 2000, 5000)
+# =============================================================================
+# timmed_df = trim(filtered_df, 2000, 5000)
+# =============================================================================
+#%%
+# =============================================================================
+# shifted_df = shift_series(filtered_df, 1000)
+# =============================================================================
+#%%
+# =============================================================================
+# correlation_matrix, p_value_matrix = calculate_correlations(filtered_df)
+# =============================================================================
+
+#%%
+# =============================================================================
+# fisher_correlation_matrix = correlation_matrix.applymap(fisher_transform)
+# 
+# =============================================================================
+#%%
+
+#%%
+first_relaksation_df = data_df[data_df.index.str.contains('2w', regex=True)]
+# Obliczenie średniej ostatnich elementów w kolumnie 'x'
+first_relaksation_mean_stop = first_relaksation_df['x'].apply(lambda arr: arr[-1]).mean()
+
+mean_stop_threshold = 0.9 * first_relaksation_mean_stop
+filtered_df = first_relaksation_df[first_relaksation_df['x'].apply(lambda arr: arr[-1] < mean_stop_threshold)]
 #%%
 # =============================================================================
 # for i in range(data_df.shape[0]):
@@ -150,8 +234,15 @@ timmed_df = trim(filtered_df, 2000, 5000)
 # =============================================================================
 
 #%%
-
-
-
+# =============================================================================
+# fisher_transform_vec = np.vectorize(fisher_transform)
+# fisher_df = pd.DataFrame(
+#     {'x': [np.arange(-1.0, 1.0, 0.01)],
+#      'y': [fisher_transform_vec(np.arange(-1.0, 1.0, 0.01))]
+#      },
+#      index = ['fisher_tranform']
+#      )
+# scatter_plot(fisher_df)
+# =============================================================================
 
 
