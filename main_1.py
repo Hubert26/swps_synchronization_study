@@ -19,6 +19,9 @@ from scipy.interpolate import interp1d
 from scipy.stats import pearsonr
 from collections import OrderedDict
 import re
+
+
+ctrl + 4/5
 #%% Create datasets for inf, data and correlations
 metadata_df = pd.DataFrame(columns=['TIME',
                                     'DATE' ,
@@ -331,6 +334,217 @@ matrix_heatmap(p_value_df, "p_value")
 
 #%%
 #scatter_plot(r_1_series_list, r_1_series_info_list, title = 'TEST')
+#%%
+def get_ifo_from_path(file_path):
+    try:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File '{file_path}' not found.")
 
+        file_name = os.path.splitext(os.path.basename(file_path))[0]
+        index = file_name.split()
 
+        if len(index):
+            return index[0]
+        else:
+            return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+#%%
+# Obliczenie średniej ostatnich elementów w kolumnie 'x'
+#first_relaxation_mean_stop = first_relaxation_df['x'].apply(lambda arr: arr[-1]).mean()
 
+#mean_stop_threshold = 0.9 * first_relaxation_mean_stop
+#filtered_df = first_relaxation_df[first_relaxation_df['x'].apply(lambda arr: arr[-1] < mean_stop_threshold)]
+
+#%%
+wb1 = data_df[data_df.index.str.contains('1w.._1', regex=True)]
+wb2 = data_df[data_df.index.str.contains('2w.._1', regex=True)]
+
+#%%
+w1 = data_df[data_df.index.str.contains('1w.._(?!1)', regex=True)]
+w2 = data_df[data_df.index.str.contains('2w.._(?!1)', regex=True)]
+
+#%%
+# =============================================================================
+# filtered_df = data_df[data_df.index.str.contains('1rk1 |1rm1 ', regex=True)]
+# =============================================================================
+
+#%%
+# =============================================================================
+# timmed_df = trim(filtered_df, 2000, 5000)
+# =============================================================================
+#%%
+# =============================================================================
+# shifted_df = shift_series(filtered_df, 1000)
+# =============================================================================
+#%%
+# =============================================================================
+# correlation_matrix, p_value_matrix = calculate_correlations(filtered_df)
+# =============================================================================
+
+#%%
+# =============================================================================
+# fisher_correlation_matrix = correlation_matrix.applymap(fisher_transform)
+# 
+# =============================================================================
+#%%
+# =============================================================================
+# for i in range(data_df.shape[0]):
+#     scatter_plot(data_df.iloc[i:i+1])
+# =============================================================================
+
+#%%
+# =============================================================================
+# fisher_transform_vec = np.vectorize(fisher_transform)
+# fisher_df = pd.DataFrame(
+#     {'x': [np.arange(-1.0, 1.0, 0.01)],
+#      'y': [fisher_transform_vec(np.arange(-1.0, 1.0, 0.01))]
+#      },
+#      index = ['fisher_tranform']
+#      )
+# scatter_plot(fisher_df)
+# =============================================================================
+
+#%%
+def shift_series(df, shift_time_ms):
+    df_copy = df.copy()
+    for i in range(df_copy.shape[0]):
+        df_copy.iloc[i]['x']+=shift_time_ms
+        df_copy.iloc[i]['shift'] = int(pd.to_timedelta(shift_time_ms, unit='ms').total_seconds())
+        rename_index(df_copy, i, df_copy.iloc[i]['meas_name'] + "_" + str(df_copy.iloc[i]['shift']))
+    return df_copy
+
+#%%
+def shift_series(df, shift_time_ms):
+    df_copy = df.copy()
+    result_df = pd.DataFrame(columns=df.columns)
+    new_index = []  # Lista przechowująca nowe indeksy
+    
+    for i in range(df_copy.shape[0]):
+        # Przypisanie wartości do DataFrame za pomocą metody `at`
+        result_df.at[i, 'x'] = df_copy.at[i, 'x'] + shift_time_ms
+        result_df.at[i, 'y'] = df_copy.at[i, 'y']
+        result_df.at[i, 'shift'] = int(pd.to_timedelta(shift_time_ms, unit='ms').total_seconds())
+        result_df.at[i, 'starttime'] = df_copy.at[i, 'starttime']
+        result_df.at[i, 'endtime'] = df_copy.at[i, 'endtime']
+        result_df.at[i, 'duration'] = df_copy.at[i, 'duration']
+        
+        # Dodanie nowego indeksu do listy
+        new_index.append(df_copy.at[i, 'meas_name'] + "_" + str(result_df.at[i, 'shift']))
+    
+    # Przypisanie nowej listy indeksów do DataFrame
+    result_df.index = new_index
+    
+    return result_df
+
+#%%
+def calculate_correlations(df):
+    df = trim(df)
+    n_rows = df.shape[0]
+    correlation_matrix = np.empty((n_rows, n_rows))
+    p_value_matrix = np.empty((n_rows, n_rows))
+    
+    # Pobranie nazw kolumn i indeksów
+    index_names = df.index.values
+    column_names = df.index.values
+    
+    for i, row1 in enumerate(df.iterrows()):
+        _, data1 = row1
+        x1, y1 = data1['x'], data1['y']
+        
+        for j, row2 in enumerate(df.iterrows()):
+            _, data2 = row2
+            x2, y2 = data2['x'], data2['y']
+            
+            common_x = np.union1d(x1, x2)
+            y1_interp = interp1d(x1, y1, kind='linear', fill_value='extrapolate')(common_x)
+            y2_interp = interp1d(x2, y2, kind='linear', fill_value='extrapolate')(common_x)
+            
+            correlation, p_value = pearsonr(y1_interp, y2_interp)
+            correlation_matrix[i, j] = round(correlation,4)
+            p_value_matrix[i, j] = round(p_value,4)
+            
+    correlation_df = pd.DataFrame(correlation_matrix, index=index_names, columns=column_names)
+    p_value_df = pd.DataFrame(p_value_matrix, index=index_names, columns=column_names)
+    
+    return correlation_df, p_value_df
+
+#%%
+def calculate_correlations(df):
+    df = trim(df)
+    n_rows = df.shape[0]
+    correlation_matrix = np.empty((n_rows, n_rows))
+    p_value_matrix = np.empty((n_rows, n_rows))
+    
+    # Pobranie nazw kolumn i indeksów
+    index_names = df.index.values
+    column_names = df.index.values
+    
+    for i, (_, data1) in enumerate(df.iterrows()):
+        for j, (_, data2) in enumerate(df.iterrows()):
+            data = pd.DataFrame([data1, data2])
+            data.reset_index(drop=True, inplace=True)   
+            data = trim(data)
+            
+            x1 = data.iloc[0]['x']
+            y1 = data.iloc[0]['y']
+            x2 = data.iloc[1]['x']
+            y2 = data.iloc[1]['y']
+                        
+            common_x = np.union1d(x1, x2)
+            y1_interp = interp1d(x1, y1, kind='linear', fill_value='extrapolate')(common_x)
+            y2_interp = interp1d(x2, y2, kind='linear', fill_value='extrapolate')(common_x)
+            
+            correlation, p_value = pearsonr(y1_interp, y2_interp)
+            correlation_matrix[i, j] = round(correlation,4)
+            p_value_matrix[i, j] = round(p_value,4)
+            
+    correlation_df = pd.DataFrame(correlation_matrix, index=index_names, columns=column_names)
+    p_value_df = pd.DataFrame(p_value_matrix, index=index_names, columns=column_names)
+    
+    return correlation_df, p_value_df
+
+#%%
+def merge_meas(df):
+    df = df.sort_values(by='starttime')
+    result_df = pd.DataFrame(columns=df.columns)
+    
+    unique_meas_names = df['meas_name'].unique()
+    
+    for name in unique_meas_names:
+        subset_df = df[df['meas_name'] == name].reset_index(drop=True)
+        
+        
+        if subset_df.shape[0] > 1:
+            diffs = [0] + [(subset_df.iloc[i+1]['starttime'] - subset_df.iloc[0]['starttime']).total_seconds() * 1000 
+                           for i in range(subset_df.shape[0] - 1)]
+            
+            subset_df['x'] = subset_df.apply(lambda row: row['x'] + int(diffs[row.name]), axis=1)
+            
+            print(subset_df['x'])
+            
+            starttime = min(subset_df['starttime'])
+            endtime = max(subset_df['endtime'])
+            duration = (endtime - starttime).total_seconds() / 60
+            
+            tmp_row_data = pd.DataFrame({'x': [np.concatenate(subset_df['x'].values)],
+                                         'y': [np.concatenate(subset_df['y'].values)],
+                                         'shift': [subset_df.iloc[0]['shift']],
+                                         'meas_name': [name],
+                                         'starttime': [starttime],
+                                         'endtime': [endtime],
+                                         'duration': [duration]
+                                         })
+            
+            print(tmp_row_data.iloc[0]['x'][-1])
+            
+            tmp_row_data.index = pd.Index([tmp_row_data.iloc[0]['meas_name'] + "_" + str(tmp_row_data.iloc[0]['shift'])])
+            
+            
+        result_df = pd.concat([result_df, tmp_row_data])
+    
+    return result_df
+
+#%%
+tmp_selected_meas = data_df[data_df.index.str.contains('2r.\d+_(?!0)', regex=True)]
