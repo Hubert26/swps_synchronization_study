@@ -32,41 +32,6 @@ for i in range(len(file_paths)):
     data_df = extract_data_from_file(file_paths[i], data_df)
 
 #%%
-selected_df = data_df[data_df.index.str.contains('2r', regex=True)]
-merged_df = merge_meas(selected_df)
-shifted_df = merged_df.copy()
-for i in range(1000, 10001, 1000):
-    shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
-
-matching_pairs = find_pairs(shifted_df)
-
-#%%
-best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
-
-for pair in matching_pairs:
-    meas_1 = shifted_df.loc[shifted_df.meas_name == pair[0]]
-    meas_2 = shifted_df.loc[shifted_df.meas_name == pair[1]]
-
-    correlation_matrix, p_value_matrix = calculate_correlations(meas_1, meas_2)
-    best_corr = find_best_corr_pairs(correlation_matrix, p_value_matrix, meas_1, meas_2)
-
-    best_corr_df = pd.concat([best_corr_df, best_corr], ignore_index=True)
-
-best_corr_df.reset_index(drop=True, inplace=True)
-
-#%%
-r2_best_corr = best_corr_df.copy()
-r2_selected_df = selected_df.copy()
-r2_merged_df = merged_df.copy()
-
-#%%
-r2_tmp = r2_selected_df[r2_selected_df.meas_name.str.contains('2r.7', regex=True)]
-r2_m_tmp = r2_merged_df[r2_merged_df.meas_name.str.contains('2r.7', regex=True)]
-
-#%%
-#scatter_plot(tmp_merged_meas)
-
-#%%
 
 
 
@@ -105,6 +70,47 @@ r1_m_tmp = merged_df[merged_df.meas_name.str.contains('1r.8', regex=True)]
 
 #%%
 #scatter_plot(tmp_merged_meas)
+
+#%%
+
+
+
+
+#%%
+selected_df = data_df[data_df.index.str.contains('2r', regex=True)]
+merged_df = merge_meas(selected_df)
+shifted_df = merged_df.copy()
+for i in range(1000, 10001, 1000):
+    shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
+
+matching_pairs = find_pairs(shifted_df)
+
+#%%
+best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
+
+for pair in matching_pairs:
+    meas_1 = shifted_df.loc[shifted_df.meas_name == pair[0]]
+    meas_2 = shifted_df.loc[shifted_df.meas_name == pair[1]]
+
+    correlation_matrix, p_value_matrix = calculate_correlations(meas_1, meas_2)
+    best_corr = find_best_corr_pairs(correlation_matrix, p_value_matrix, meas_1, meas_2)
+
+    best_corr_df = pd.concat([best_corr_df, best_corr], ignore_index=True)
+
+best_corr_df.reset_index(drop=True, inplace=True)
+
+#%%
+r2_best_corr = best_corr_df.copy()
+r2_selected_df = selected_df.copy()
+r2_merged_df = merged_df.copy()
+
+#%%
+r2_tmp = r2_selected_df[r2_selected_df.meas_name.str.contains('2r.7', regex=True)]
+r2_m_tmp = r2_merged_df[r2_merged_df.meas_name.str.contains('2r.7', regex=True)]
+
+#%%
+#scatter_plot(tmp_merged_meas)
+
 
 #%%
 
