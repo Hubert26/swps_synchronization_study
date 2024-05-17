@@ -332,8 +332,20 @@ def find_pairs(df, index=0):
                 else:
                     matching_pairs.add((row_1['meas_name'], row_2['meas_name']))  # Dodajemy parę nazw do zbioru
     
-    # Konwertujemy zestawy na krotki przed zwróceniem wyników
-    return [tuple(pair) for pair in matching_pairs]
+    # Konwertujemy zestawy na krotki
+    matching_pairs = [tuple(pair) for pair in matching_pairs]
+    
+    all_meas_names = set(df['meas_name'])  # Zbierz wszystkie unikalne nazwy pomiarów z df['meas_name']
+
+    # Sprawdź, które pomiary nie są w `matching_pairs`
+    unmatched_meas = all_meas_names - set(pair[0] for pair in matching_pairs) - set(pair[1] for pair in matching_pairs)
+    
+    return matching_pairs, list(unmatched_meas)
+    
+
+
+
+
     
 
 

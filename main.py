@@ -42,7 +42,7 @@ shifted_df = merged_df.copy()
 for i in range(1000, 10001, 1000):
     shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
 
-matching_pairs = find_pairs(shifted_df)
+matching_pairs, unmatched_meas = find_pairs(shifted_df)
 
 #%%
 best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
@@ -62,14 +62,15 @@ best_corr_df.reset_index(drop=True, inplace=True)
 r1_best_corr = best_corr_df.copy()
 r1_selected_df = selected_df.copy()
 r1_merged_df = merged_df.copy()
+r1_unmatched_meas = unmatched_meas
 
 #%%
-r1_tmp = selected_df[selected_df.meas_name.str.contains('1r.8', regex=True)]
-r1_m_tmp = merged_df[merged_df.meas_name.str.contains('1r.8', regex=True)]
+r1_tmp = r1_selected_df[r1_selected_df.meas_name.str.contains('1r.14', regex=True)]
+r1_m_tmp = r1_merged_df[r1_merged_df.meas_name.str.contains('1r.14', regex=True)]
 
 
 #%%
-#scatter_plot(tmp_merged_meas)
+#scatter_plot(r1_m_tmp)
 
 #%%
 
@@ -83,7 +84,7 @@ shifted_df = merged_df.copy()
 for i in range(1000, 10001, 1000):
     shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
 
-matching_pairs = find_pairs(shifted_df)
+matching_pairs, unmatched_meas = find_pairs(shifted_df)
 
 #%%
 best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
@@ -103,6 +104,7 @@ best_corr_df.reset_index(drop=True, inplace=True)
 r2_best_corr = best_corr_df.copy()
 r2_selected_df = selected_df.copy()
 r2_merged_df = merged_df.copy()
+r2_unmatched_meas = unmatched_meas
 
 #%%
 r2_tmp = r2_selected_df[r2_selected_df.meas_name.str.contains('2r.7', regex=True)]
@@ -123,7 +125,7 @@ shifted_df = merged_df.copy()
 for i in range(1000, 10001, 1000):
     shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
 
-matching_pairs = find_pairs(shifted_df)
+matching_pairs, unmatched_meas = find_pairs(shifted_df)
 
 #%%
 best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
@@ -143,10 +145,11 @@ best_corr_df.reset_index(drop=True, inplace=True)
 w1b_best_corr = best_corr_df.copy()
 w1b_selected_df = selected_df.copy()
 w1b_merged_df = merged_df.copy()
+w1b_unmatched_meas = unmatched_meas
 
 #%%
-w1b_tmp = selected_df[selected_df.meas_name.str.contains('1w.8', regex=True)]
-w1b_m_tmp = merged_df[merged_df.meas_name.str.contains('1w.8', regex=True)]
+w1b_tmp = w1b_selected_df[w1b_selected_df.meas_name.str.contains('1w.8', regex=True)]
+w1b_m_tmp = w1b_merged_df[w1b_merged_df.meas_name.str.contains('1w.8', regex=True)]
 
 
 #%%
@@ -157,13 +160,13 @@ w1b_m_tmp = merged_df[merged_df.meas_name.str.contains('1w.8', regex=True)]
 
 
 #%%
-selected_df = data_df[data_df.index.str.contains('1w.\d+_(?!0)', regex=True)]
+selected_df = data_df[data_df.index.str.contains('1w.\d+_(?!1)', regex=True)]
 merged_df = merge_meas(selected_df)
 shifted_df = merged_df.copy()
 for i in range(1000, 10001, 1000):
     shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
 
-matching_pairs = find_pairs(shifted_df)
+matching_pairs, unmatched_meas = find_pairs(shifted_df)
 
 #%%
 best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
@@ -183,10 +186,11 @@ best_corr_df.reset_index(drop=True, inplace=True)
 w1_best_corr = best_corr_df.copy()
 w1_selected_df = selected_df.copy()
 w1_merged_df = merged_df.copy()
+w1_unmatched_meas = unmatched_meas
 
 #%%
-w1_tmp = selected_df[selected_df.meas_name.str.contains('1w.8', regex=True)]
-w1_m_tmp = merged_df[merged_df.meas_name.str.contains('1w.8', regex=True)]
+w1_tmp = w1_selected_df[w1_selected_df.meas_name.str.contains('1w.8', regex=True)]
+w1_m_tmp = w1_merged_df[w1_merged_df.meas_name.str.contains('1w.8', regex=True)]
 
 
 #%%
@@ -202,7 +206,7 @@ shifted_df = merged_df.copy()
 for i in range(1000, 10001, 1000):
     shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
 
-matching_pairs = find_pairs(shifted_df)
+matching_pairs, unmatched_meas = find_pairs(shifted_df)
 
 #%%
 best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
@@ -222,27 +226,28 @@ best_corr_df.reset_index(drop=True, inplace=True)
 w2b_best_corr = best_corr_df.copy()
 w2b_selected_df = selected_df.copy()
 w2b_merged_df = merged_df.copy()
+w2b_unmatched_meas = unmatched_meas
 
 #%%
-w2b_tmp = selected_df[selected_df.meas_name.str.contains('1w.8', regex=True)]
-w2b_m_tmp = merged_df[merged_df.meas_name.str.contains('1w.8', regex=True)]
-
-
-#%%
-#scatter_plot(tmp_merged_meas)
-
-#%%
-
+w2b_tmp = w2b_selected_df[w2b_selected_df.meas_name.str.contains('2w.16', regex=True)]
+w2b_m_tmp = w2b_merged_df[w2b_merged_df.meas_name.str.contains('2w.16', regex=True)]
 
 
 #%%
-selected_df = data_df[data_df.index.str.contains('2w.\d+_(?!0)', regex=True)]
+#scatter_plot(w2b_m_tmp)
+
+#%%
+
+
+
+#%%
+selected_df = data_df[data_df.index.str.contains('2w.\d+_(?!1)', regex=True)]
 merged_df = merge_meas(selected_df)
 shifted_df = merged_df.copy()
 for i in range(1000, 10001, 1000):
     shifted_df = pd.concat([shifted_df, shift_series(merged_df, i)])
 
-matching_pairs = find_pairs(shifted_df)
+matching_pairs, unmatched_meas = find_pairs(shifted_df)
 
 #%%
 best_corr_df = pd.DataFrame(columns=['indeks_1', 'meas_name_1', 'shift_1', 'indeks_2', 'meas_name_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
@@ -262,13 +267,14 @@ best_corr_df.reset_index(drop=True, inplace=True)
 w2_best_corr = best_corr_df.copy()
 w2_selected_df = selected_df.copy()
 w2_merged_df = merged_df.copy()
+w2_unmatched_meas = unmatched_meas
 
 #%%
-w2_tmp = selected_df[selected_df.meas_name.str.contains('1w.8', regex=True)]
-w2_m_tmp = merged_df[merged_df.meas_name.str.contains('1w.8', regex=True)]
+w2_tmp = w2_selected_df[w2_selected_df.meas_name.str.contains('2w.16', regex=True)]
+w2_m_tmp = w2_merged_df[w2_merged_df.meas_name.str.contains('2w.16', regex=True)]
 
 
 #%%
-#scatter_plot(tmp_merged_meas)
+#scatter_plot(w2_m_tmp)
 
 #%%
