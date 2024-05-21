@@ -548,3 +548,15 @@ def merge_meas(df):
 
 #%%
 tmp_selected_meas = data_df[data_df.index.str.contains('2r.\d+_(?!0)', regex=True)]
+
+#%%
+def save_plot(fig, file_name, folder_name="out"):
+    # Sprawdzenie istnienia katalogu i jego utworzenie, jeśli nie istnieje
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+        
+    # Utworzenie pełnej ścieżki do pliku wyjściowego
+    output_file_path = os.path.join(folder_name, f"{file_name}.html")
+    
+    # Zapisanie wykresu do pliku HTML
+    pio.write_html(fig, output_file_path)

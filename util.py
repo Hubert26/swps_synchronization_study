@@ -9,6 +9,11 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.io as pio
+import plotly.graph_objects as go
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+import mpld3
 import re
 pio.renderers.default='browser'
 
@@ -101,14 +106,90 @@ def scatter_plot(df, title=None):
         title = f"{names} RANGE from {start} to {stop}"
     
     fig.update_layout(title=title)
-    display(fig)
     
-# =============================================================================
-#     output_file_path = os.path.join("out", f"{title}.html")
-#     pio.write_html(fig, output_file_path)
-#     pio.write_html(fig, output_file_path)
-# =============================================================================
+    return fig, title
 
+#%%
+def density_plot(df, title=None):
+    names = df.index.tolist()
+    fig = go.Figure()
+    
+    for i, y_data in enumerate(df['y']):
+        trace = go.Histogram(x=y_data, histnorm='probability density', name=names[i])
+        fig.add_trace(trace)
+        
+        # Dodanie linii pionowych dla wartości odstających
+        outlier_low = np.mean(y_data) - 2 * np.std(y_data)
+        outlier_high = np.mean(y_data) + 2 * np.std(y_data)
+        trace_color = trace.line.color
+        fig.add_vline(x=outlier_low, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_Low_{names[i]}", annotation_position="top left", annotation_textangle=90)
+        fig.add_vline(x=outlier_high, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_High_{names[i]}", annotation_position="top right",  annotation_textangle=90)
+    
+    fig.update_layout(
+        xaxis_title="RR-interval [ms]",
+        yaxis_title="Density",
+    )
+    
+    if title is None:
+        title = "Distribution of RR-intervals"
+    
+    fig.update_layout(title=title)
+    
+    return fig, title
+
+#%%
+def corr_heatmap(df, title=None, color='viridis'):
+    # Tworzenie własnej mapy kolorów z 20 odcieniami od -1 do 1
+    colors = sns.color_palette(color, 20)
+    cmap = LinearSegmentedColormap.from_list('custom_colormap', colors, N=20)
+    
+    with sns.axes_style("white"):
+        f, ax = plt.subplots(figsize=(10, 10))
+        sns.heatmap(df,
+                    annot=df.round(2),
+                    vmax=1,
+                    vmin=-1,
+                    center=0,
+                    square=True,
+                    xticklabels=df.columns,
+                    yticklabels=df.index,
+                    cmap=cmap,
+                    linewidths=.5,
+                    cbar_kws={"shrink": 0.7, 'ticks': np.linspace(-1, 1, 21)})
+        # Ustawienie rotacji etykiet
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+    
+    if not title:
+        title = 'heatmap'
+    
+    plt.title(title)
+
+    return f, title
+#%%
+def save_plot(fig, file_name, folder_name="out", format="png"):
+    # Sprawdzenie istnienia katalogu i jego utworzenie, jeśli nie istnieje
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+        
+    # Utworzenie pełnej ścieżki do pliku wyjściowego
+    output_file_path = os.path.join(folder_name, f"{file_name}.{format}")
+    
+    if isinstance(fig, go.Figure):
+        if format == "html":
+            # Zapisanie wykresu Plotly do pliku HTML
+            pio.write_html(fig, output_file_path)
+        else:
+            # Zapisanie wykresu Plotly do pliku graficznego (PNG, JPG, SVG, PDF)
+            fig.write_image(output_file_path, format=format)
+    elif isinstance(fig, plt.Figure):
+        if format == "html":
+            # Zapisanie wykresu Matplotlib do pliku HTML za pomocą mpld3
+            mpld3.save_html(fig, output_file_path)
+        else:
+            # Zapisanie wykresu Matplotlib do pliku graficznego (PNG, JPG, SVG, PDF)
+            fig.savefig(output_file_path, format=format)
+    
 #%%
 def rename_index(df, idx, new_idx_name):      
     new_index = list(df.index)
@@ -147,7 +228,7 @@ def interpolate(x, y, ix, method='linear'):
     f = interp1d(x, y, kind=method, fill_value='extrapolate')
     return f(ix).tolist()
 #%%
-def shift_series(df, shift_time_ms):
+def shift_series(df, shift_time_ms, index=0):
     df_copy = df.copy()
     df_copy.reset_index(drop=True, inplace=True)
     
@@ -158,7 +239,10 @@ def shift_series(df, shift_time_ms):
         # Przypisanie wartości do DataFrame za pomocą metody `at`
         result_df.at[i, 'x'] = df_copy.at[i, 'x'] + shift_time_ms
         result_df.at[i, 'y'] = df_copy.at[i, 'y']
-        result_df.at[i, 'shift'] = int(pd.to_timedelta(shift_time_ms, unit='ms').total_seconds())
+        if index:
+            result_df.at[i, 'shift'] = int(pd.to_timedelta(shift_time_ms, unit='ms').total_seconds())
+        else:
+            result_df.at[i, 'shift'] = df_copy.at[i, 'shift']
         result_df.at[i, 'meas_name'] = df_copy.at[i, 'meas_name']
         result_df.at[i, 'starttime'] = df_copy.at[i, 'starttime']
         result_df.at[i, 'endtime'] = df_copy.at[i, 'endtime']
@@ -207,7 +291,7 @@ def calculate_correlations(df1, df2):
             y2_interp = interp1d(x2, y2, kind='linear', fill_value='extrapolate')(common_x)
             
             correlation, p_value = pearsonr(y1_interp, y2_interp)
-            correlation_matrix[i, j] = round(correlation,4)
+            correlation_matrix[i, j] = fisher_transform(round(correlation,4))
             p_value_matrix[i, j] = round(p_value,4)
             
     correlation_df = pd.DataFrame(correlation_matrix, index=index_names, columns=column_names)
@@ -342,6 +426,23 @@ def find_pairs(df, index=0):
     
     return matching_pairs, list(unmatched_meas)
     
+#%%
+def calculate_time_difference(row1, row2):
+    starttime1 = pd.to_datetime(row1['starttime'].iloc[0])
+    starttime2 = pd.to_datetime(row2['starttime'].iloc[0])
+    
+    if isinstance(starttime1, pd.Timestamp) and isinstance(starttime2, pd.Timestamp):
+        diff_start_time_ms = (starttime1 - starttime2).total_seconds() * 1000
+    else:
+        diff_start_time_ms = np.nan
+
+    pair_df = pd.DataFrame({
+        'meas_name_1': [row1['meas_name'].iloc[0]],
+        'meas_name_2': [row2['meas_name'].iloc[0]],
+        'diff_start_time_ms': [diff_start_time_ms]
+    })
+    
+    return pair_df
 
 
 
