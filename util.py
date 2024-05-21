@@ -119,11 +119,11 @@ def density_plot(df, title=None):
         fig.add_trace(trace)
         
         # Dodanie linii pionowych dla wartości odstających
-        outlier_low = np.mean(y_data) - 2 * np.std(y_data)
-        outlier_high = np.mean(y_data) + 2 * np.std(y_data)
-        trace_color = trace.line.color
-        fig.add_vline(x=outlier_low, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_Low_{names[i]}", annotation_position="top left", annotation_textangle=90)
-        fig.add_vline(x=outlier_high, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_High_{names[i]}", annotation_position="top right",  annotation_textangle=90)
+        outlier_low = round(np.mean(y_data) - 2 * np.std(y_data))
+        outlier_high = round(np.mean(y_data) + 2 * np.std(y_data))
+        trace_color = "gray"
+        fig.add_vline(x=outlier_low, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_Low_{names[i]} = {outlier_low}", annotation_position="top left", annotation_textangle=90)
+        fig.add_vline(x=outlier_high, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_High_{names[i]} = {outlier_high}", annotation_position="top right",  annotation_textangle=90)
     
     fig.update_layout(
         xaxis_title="RR-interval [ms]",
@@ -444,7 +444,62 @@ def calculate_time_difference(row1, row2):
     
     return pair_df
 
+#%%
+def remove_outliers(rr: np.ndarray) -> np.ndarray:
+    rr = np.array(rr, dtype=float)  # Konwertowanie rr na ndarray typu float
+    
+    mean_prev_next = np.convolve(rr, [1, 0, 1], 'same') / 2
+    mask = (rr > 1.2 * mean_prev_next) | (rr < 0.8 * mean_prev_next)
+    mask[0] = mask[-1] = False  # Ignorowanie pierwszego i ostatniego elementu
+    rr[mask] = np.nan
 
+    outlier_low = round(np.nanmean(rr) - 2 * np.nanstd(rr))
+    outlier_high = round(np.nanmean(rr) + 2 * np.nanstd(rr))
+    # Zmiana wartości odstających na np.nan
+    rr[(rr < outlier_low) | (rr > outlier_high)] = np.nan
+    
+    return rr
+
+#%%
+def interpolate_nan_values(rr: np.ndarray) -> np.ndarray:
+    # Znalezienie indeksów nan
+    nans = np.isnan(rr)
+    if np.any(nans):
+        # Indeksy, które nie są nan
+        not_nans = ~nans
+        x = np.arange(len(rr))
+        # Interpolacja wartości nan
+        rr[nans] = np.interp(x[nans], x[not_nans], rr[not_nans])
+        
+    return rr
+
+#%%
+def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    result_df = pd.DataFrame(columns=df.columns)  
+    for i in range(len(df)):
+        rr = df.iloc[i]['y']
+        rr = np.array(rr, dtype=float)  # Konwertowanie rr na ndarray typu float
+        
+        rr = remove_outliers(rr)
+        rr = interpolate_nan_values(rr)
+        
+        x = np.cumsum(rr)
+        starttime = df.iloc[i]['starttime']
+        endtime = starttime + pd.to_timedelta(x[-1], unit='ms')
+        duration = (endtime - starttime).total_seconds() / 60
+    
+        tmp_row_data = pd.DataFrame({'x': [x],
+                                     'y': [rr],
+                                     'shift': [df.iloc[i]['shift']],
+                                     'meas_name': [df.iloc[i]['meas_name']],
+                                     'starttime': [starttime],
+                                     'endtime': [endtime],
+                                     'duration': [duration]
+                                     }, index=[df.index[i]])
+    
+        result_df = pd.concat([result_df, tmp_row_data])
+    
+    return result_df
 
 
     
