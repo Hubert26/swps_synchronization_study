@@ -22,6 +22,65 @@ from scipy.interpolate import interp1d
 from scipy.stats import pearsonr
 
 from IPython.display import display
+
+#%%
+cooperation_1_time_intervals = {
+    (0, 8000): "1_z1_instr",
+    (8000, 28000): "1_z1_1_k",
+    (28000, 48000): "1_z1_2_m",
+    (48000, 68000): "1_z1_3_k",
+    (68000, 88000): "1_z1_4_m",
+    (88000, 108000): "1_z1_5_k",
+    (108000, 128000): "1_z1_6_m",
+    (128000, 136000): "1_z1_odp_idle",
+    (226000, 226000): "1_z1_odp",
+    (246000, 286000): "1_pause",
+    (286000, 294000): "1_z2_instr",
+    (294000, 314000): "1_z2_1_m",
+    (314000, 334000): "1_z2_2_k",
+    (334000, 354000): "1_z2_3_m",
+    (354000, 374000): "1_z2_4_k",
+    (374000, 394000): "1_z2_5_m",
+    (394000, 414000): "1_z2_6_k",
+    (414000, 422000): "1_z2_odp_idle",
+    (422000, 512000): "1_z2_odp",
+    (512000, 547000): "1_baseline2_idle",
+    (547000, 787000): "1_baseline2",
+}
+
+cooperation_2_time_intervals = {
+    (0, 8000): "2_z1_instr",
+    (8000, 28000): "2_z1_1_k",
+    (28000, 48000): "2_z1_2_m",
+    (48000, 68000): "2_z1_3_k",
+    (68000, 88000): "2_z1_4_m",
+    (88000, 108000): "2_z1_5_k",
+    (108000, 128000): "2_z1_6_m",
+    (128000, 136000): "2_z1_odp_idle",
+    (226000, 226000): "2_z1_odp",
+    (246000, 286000): "2_pause",
+    (286000, 294000): "2_z2_instr",
+    (294000, 314000): "2_z2_1_m",
+    (314000, 334000): "2_z2_2_k",
+    (334000, 354000): "2_z2_3_m",
+    (354000, 374000): "2_z2_4_k",
+    (374000, 394000): "2_z2_5_m",
+    (394000, 414000): "2_z2_6_k",
+    (414000, 422000): "2_z2_odp_idle",
+    (422000, 512000): "2_z2_odp",
+    (512000, 547000): "2_baseline2_idle",
+    (547000, 787000): "2_baseline2",
+}
+
+baseline_1_time_intervals = {
+    (0, 20000): "1_baseline1_idle",
+    (20000, 260000): "1_baseline1",
+}
+
+baseline_2_time_intervals = {
+    (0, 20000): "2_baseline1_idle",
+    (20000, 260000): "2_baseline1",
+}
 #%%
 def get_info_from_path(file_path, part = 0):
     try:
@@ -197,22 +256,26 @@ def rename_index(df, idx, new_idx_name):
     df.index = new_index
     
 #%%
-def trim(df, start=None, stop=None):
+def trim(df, start=None, end=None):
     df_copy = df.copy()
     max_start = max(df_copy['x'].apply(lambda arr: arr[0]))
     min_stop = min(df_copy['x'].apply(lambda arr: arr[-1]))
     
+    # Ustawienie domyślnych wartości dla start_time i end_time
+    start_time = max_start
+    end_time = min_stop
+
     if start is None or start < max_start:
-        start = max_start
+        start_time = max_start
     
-    if stop is None or stop > min_stop:
-        stop = min_stop
+    if end is None or end > min_stop:
+        end_time = min_stop
         
     
     for i in range(df_copy.shape[0]):
         x=df_copy.iloc[i]['x']
         y=df_copy.iloc[i]['y']
-        selected_indices_x = np.where((x >= start) & (x <= stop))[0]
+        selected_indices_x = np.where((x >= start_time) & (x <= end_time))[0]
         df_copy.iloc[i]['x'] = x[selected_indices_x]
         df_copy.iloc[i]['y'] = y[selected_indices_x]
         
@@ -352,10 +415,10 @@ def find_best_corr_pairs(correlation_df, p_value_df, meas_1, meas_2):
     
     result_df = pd.DataFrame({
         'indeks_1': selected_meas_1.index,
-        'meas_name_1': selected_meas_1['meas_name'].values,
+        #'meas_name_1': selected_meas_1['meas_name'].values,
         'shift_1': selected_meas_1['shift'].values,
         'indeks_2': selected_meas_2.index,
-        'meas_name_2': selected_meas_2['meas_name'].values,
+        #'meas_name_2': selected_meas_2['meas_name'].values,
         'shift_2': selected_meas_2['shift'].values,
         'shift_diff': selected_meas_1['shift'].values - selected_meas_2['shift'].values
     })
@@ -445,19 +508,25 @@ def calculate_time_difference(row1, row2):
     return pair_df
 
 #%%
-def remove_outliers(rr: np.ndarray) -> np.ndarray:
-    rr = np.array(rr, dtype=float)  # Konwertowanie rr na ndarray typu float
-    
-    mean_prev_next = np.convolve(rr, [1, 0, 1], 'same') / 2
-    mask = (rr > 1.2 * mean_prev_next) | (rr < 0.8 * mean_prev_next)
-    mask[0] = mask[-1] = False  # Ignorowanie pierwszego i ostatniego elementu
-    rr[mask] = np.nan
-
+def remove_outliers(rr):
     outlier_low = round(np.nanmean(rr) - 2 * np.nanstd(rr))
     outlier_high = round(np.nanmean(rr) + 2 * np.nanstd(rr))
+        
     # Zmiana wartości odstających na np.nan
-    rr[(rr < outlier_low) | (rr > outlier_high)] = np.nan
+    mask = (rr < outlier_low) | (rr > outlier_high)
+    rr[mask] = np.nan
+        
+    mean_prev_next = np.array([
+        np.nan if i == 0 or i == len(rr) - 1 else np.nanmean([rr[i-1], rr[i+1]])
+        for i in range(len(rr))
+    ])
     
+    for i in range(1, len(rr) - 1):
+        if np.isnan(mean_prev_next[i]):
+            continue
+        if rr[i] > 1.2 * mean_prev_next[i] or rr[i] < 0.8 * mean_prev_next[i]:
+            rr[i] = np.nan
+            
     return rr
 
 #%%
@@ -502,8 +571,63 @@ def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
     return result_df
 
 
+#%%
+def process_rr_pair_data(df, folder_name, group_label, start_time, end_time):
+    matching_pairs, unmatched_meas = find_pairs(df)
     
+    result_df = pd.DataFrame(columns=['group_label', 'indeks_1', 'shift_1', 'indeks_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
+    diff_start_time_ms_df = pd.DataFrame(columns=['meas_name_1', 'meas_name_2','diff_start_time_ms'])
+    
+    for pair in matching_pairs:
+        meas_1 = df.loc[df.meas_name == pair[0]].iloc[[0]]
+        meas_2 = df.loc[df.meas_name == pair[1]].iloc[[0]]
+    
+        diff_start_time_ms = calculate_time_difference(meas_1, meas_2)    
+        if(diff_start_time_ms['diff_start_time_ms'].iloc[0] > 1000):
+            meas_2 = shift_series(meas_2, shift_time_ms = diff_start_time_ms['diff_start_time_ms'].iloc[0].item() - 1000, index=0)
+        elif(diff_start_time_ms['diff_start_time_ms'].iloc[0] <- 1000): 
+            meas_1 = shift_series(meas_1, shift_time_ms=abs(diff_start_time_ms['diff_start_time_ms'].iloc[0].item()) - 1000, index=0)
+        
+        meas_1 = trim(meas_1, start_time, end_time)
+        meas_2 = trim(meas_2, start_time, end_time)
+        meas_df = pd.concat([meas_1, meas_2])
+        
 
+# =============================================================================
+#         
+#         fig_hist, title_hist = density_plot(meas_df, title=f"{pair}_Distribution of RR-intervals")
+#         save_plot(fig_hist, title_hist, folder_name=f"out/hist_pairs_{folder_name}/{group_label}", format="html")
+#         
+# =============================================================================
+# =============================================================================
+#     
+#         fig_scatter, title_scatter = scatter_plot(meas_df)
+#         save_plot(fig_scatter, title_scatter, folder_name=f"out/scatter_pairs_{folder_name}/{group_label}", format="html")
+#         
+# =============================================================================
+        shifted_df = meas_df.copy()
+        for i in range(1000, 10001, 1000):
+            shifted_df = pd.concat([shifted_df, shift_series(meas_df, i, index=1)])
+        
+        meas_1 = shifted_df.loc[shifted_df.meas_name == pair[0]]
+        meas_2 = shifted_df.loc[shifted_df.meas_name == pair[1]]
+        
+        correlation_matrix, p_value_matrix = calculate_correlations(meas_1, meas_2)
+        best_corr_row = find_best_corr_pairs(correlation_matrix, p_value_matrix, meas_1, meas_2)
+        
+        # Dodanie nowej kolumny 'group_label' z wartością ze zmiennej group_label
+        best_corr_row['group_label'] = group_label
+        
+        result_df = pd.concat([result_df, best_corr_row], ignore_index=True)
+        diff_start_time_ms_df = pd.concat([diff_start_time_ms_df, diff_start_time_ms], ignore_index=True)
+    
+# =============================================================================
+# 
+#         fig_heatmap, title_heatmap = corr_heatmap(correlation_matrix, title="corr_heatmap_" + '_'.join(pair), color='coolwarm')
+#         save_plot(fig_heatmap, title_heatmap, folder_name=f"out/corr_heatmap_{folder_name}/{group_label}", format="png")
+# 
+# =============================================================================
+    return result_df #selected_df, merged_df, unmatched_meas, diff_start_time_ms_df
 
 
 
