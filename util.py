@@ -205,6 +205,10 @@ def corr_heatmap(df, title=None, color='viridis'):
     with sns.axes_style("white"):
         f, ax = plt.subplots(figsize=(10, 10))
         sns.heatmap(df,
+# =============================================================================
+# to annotate on heatmap you need previous version of matplotlib              
+# pip install matplotlib==3.7.3
+# =============================================================================
                     annot=df.round(2),
                     vmax=1,
                     vmin=-1,
@@ -593,18 +597,14 @@ def process_rr_pair_data(df, folder_name, group_label, start_time, end_time):
         meas_df = pd.concat([meas_1, meas_2])
         
 
-# =============================================================================
-#         
-#         fig_hist, title_hist = density_plot(meas_df, title=f"{pair}_Distribution of RR-intervals")
-#         save_plot(fig_hist, title_hist, folder_name=f"out/hist_pairs_{folder_name}/{group_label}", format="html")
-#         
-# =============================================================================
-# =============================================================================
-#     
-#         fig_scatter, title_scatter = scatter_plot(meas_df)
-#         save_plot(fig_scatter, title_scatter, folder_name=f"out/scatter_pairs_{folder_name}/{group_label}", format="html")
-#         
-# =============================================================================
+        
+        fig_hist, title_hist = density_plot(meas_df, title=f"{pair}_Distribution of RR-intervals")
+        save_plot(fig_hist, title_hist, folder_name=f"out/hist_pairs_{folder_name}/{group_label}", format="html")
+        
+    
+        fig_scatter, title_scatter = scatter_plot(meas_df)
+        save_plot(fig_scatter, title_scatter, folder_name=f"out/scatter_pairs_{folder_name}/{group_label}", format="html")
+        
         shifted_df = meas_df.copy()
         for i in range(1000, 10001, 1000):
             shifted_df = pd.concat([shifted_df, shift_series(meas_df, i, index=1)])
@@ -621,12 +621,10 @@ def process_rr_pair_data(df, folder_name, group_label, start_time, end_time):
         result_df = pd.concat([result_df, best_corr_row], ignore_index=True)
         diff_start_time_ms_df = pd.concat([diff_start_time_ms_df, diff_start_time_ms], ignore_index=True)
     
-# =============================================================================
-# 
-#         fig_heatmap, title_heatmap = corr_heatmap(correlation_matrix, title="corr_heatmap_" + '_'.join(pair), color='coolwarm')
-#         save_plot(fig_heatmap, title_heatmap, folder_name=f"out/corr_heatmap_{folder_name}/{group_label}", format="png")
-# 
-# =============================================================================
+
+        fig_heatmap, title_heatmap = corr_heatmap(correlation_matrix, title="corr_heatmap_" + '_'.join(pair), color='coolwarm')
+        save_plot(fig_heatmap, title_heatmap, folder_name=f"out/corr_heatmap_{folder_name}/{group_label}", format="png")
+
     return result_df #selected_df, merged_df, unmatched_meas, diff_start_time_ms_df
 
 
