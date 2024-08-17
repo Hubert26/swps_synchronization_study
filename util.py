@@ -16,8 +16,9 @@ from matplotlib.colors import LinearSegmentedColormap
 import mpld3
 import re
 pio.renderers.default='browser'
-
+import math
 import os
+from datetime import datetime
 from scipy.interpolate import interp1d
 from scipy.stats import pearsonr
 
@@ -81,554 +82,1400 @@ baseline_2_time_intervals = {
     (0, 20000): "2_baseline1_idle",
     (20000, 260000): "2_baseline1",
 }
+
 #%%
-def get_info_from_path(file_path, part = 0):
+def create_results_folder(base_name="out"):
+    """
+    Creates a new results folder in the current working directory, with a unique name 
+    based on the current date and time.
+
+    Parameters:
+    base_name (str, optional): The base name for the new folder. Defaults to "out".
+
+    Returns:
+    str: The full path to the newly created folder.
+    
+    Raises:
+    OSError: If there is an error creating the directory.
+    """
+    
+    # Set the current working directory as the output directory
+    output_dir = os.getcwd()
+    
+    # Get the current date and time in the format "YYYYMMDD_HHMMSS"
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create the name for the new results folder
+    new_folder_name = f"{base_name}_{current_time}"
+    
+    # Generate the full path for the new folder
+    folder_path = os.path.join(output_dir, new_folder_name)
+    
+    # Create the new folder if it doesn't already exist
+    os.makedirs(folder_path, exist_ok=True)
+    
+    return folder_path
+
+output_folder = create_results_folder()
+
+#%%
+def get_info_from_path(file_path, part=0):
+    """
+    Extracts a specific part of the file name from a given file path.
+
+    This function retrieves a segment of the file name based on the specified index 
+    from the file name (excluding the extension). The file name is split by whitespace 
+    or underscores into parts, and the function returns the part corresponding to 
+    the given index.
+
+    Parameters:
+    file_path (str): The full path to the file from which the information is to be extracted.
+    part (int, optional): The index of the part of the file name to return. Defaults to 0.
+
+    Returns:
+    str or None: The requested part of the file name if available; otherwise, None.
+    
+    Raises:
+    FileNotFoundError: If the specified file path does not exist.
+    """
     try:
+        # Check if the file exists
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File '{file_path}' not found.")
 
+        # Extract the file name without extension
         file_name = os.path.splitext(os.path.basename(file_path))[0]
+        
+        # Split the file name into parts based on whitespace or underscores
         index = file_name.split()
-
-        if len(index) >= part:
+        
+        # Return the requested part of the file name if it exists
+        if len(index) > part:
             return index[part]
         else:
             return None
     except Exception as e:
+        # Print any exception that occurs and return None
         print(f"An error occurred: {e}")
         return None
+    
 #%%
 def extract_data_from_file(file_path, df=None):
+    """
+    Extracts data from a specified file and appends it to a DataFrame.
+
+    This function reads numeric data from a file, processes it, and updates a DataFrame
+    with the extracted data. The file should contain numeric data separated by new lines.
+    The function also retrieves metadata from the file name to create appropriate time stamps.
+
+    Parameters:
+    file_path (str): The path to the file containing the data to be extracted.
+    df (pd.DataFrame, optional): The DataFrame to which the extracted data will be appended.
+                                  If not provided, a new DataFrame will be created.
+
+    Returns:
+    pd.DataFrame: The updated DataFrame containing the extracted and processed data.
+
+    Raises:
+    FileNotFoundError: If the file specified by `file_path` does not exist.
+    ValueError: If the file contains non-numeric data.
+    """
+    
+    # Initialize DataFrame if not provided
     if df is None:
         df = pd.DataFrame()
 
+    # Check if the file exists
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File '{file_path}' not found.")
 
     try:
+        # Read the file and split its content into lines
         with open(file_path, "r") as file:
             y_data = file.read().split('\n')
 
+        # Validate that all data lines are numeric
         if not all(map(str.isdigit, y_data)):
             raise ValueError("File contains non-numeric data.")
 
+        # Convert the list of string data to integer numpy array
         y_data = np.array(y_data).astype(int)
+
+        # Compute cumulative sum for x_data
         x_data = np.cumsum(y_data)
+
+        # Extract metadata from the file name
         shift = 0
         meas_name = get_info_from_path(file_path).split('_')[0]
-        
         start_timestamp = get_info_from_path(file_path, 1) + get_info_from_path(file_path, 2)
-        df_timestamp = pd.to_datetime(start_timestamp, format='%Y-%m-%d%H-%M-%S', errors='raise')
         
+        # Convert start timestamp to pandas datetime object
+        df_timestamp = pd.to_datetime(start_timestamp, format='%Y-%m-%d%H-%M-%S', errors='raise')
+
+        # Create a new index name for the row
         index_name = f"{get_info_from_path(file_path)}_{str(shift)}"
 
-        new_row_data = pd.DataFrame({'x': [x_data],
-                                     'y': [y_data],
-                                     'shift': [shift],
-                                    'meas_name': [meas_name]},
-                                    index=[index_name])
+        # Create a DataFrame with the new row of data
+        new_row_data = pd.DataFrame({
+            'x': [x_data],
+            'y': [y_data],
+            'shift': [shift],
+            'meas_name': [meas_name],
+            'starttime': [df_timestamp],
+            'endtime': [df_timestamp + pd.to_timedelta(x_data[-1], unit='ms')],
+            'duration': [(df_timestamp + pd.to_timedelta(x_data[-1], unit='ms') - df_timestamp).total_seconds() / 60]
+        }, index=[index_name])
 
-        new_row_data['starttime'] = df_timestamp
-        new_row_data['endtime'] = df_timestamp + + pd.to_timedelta(x_data[-1], unit='ms')
-        new_row_data['duration'] = (new_row_data['endtime'] - new_row_data['starttime']).dt.total_seconds() / 60
-
+        # Append the new row to the existing DataFrame
         df = pd.concat([df, new_row_data])
         return df
+
     except Exception as e:
+        # Print any exception that occurs and return the unchanged DataFrame
         print(f"An error occurred: {e}")
         return df
 
 #%%
-def scatter_plot(df, title=None):
-    stop = max(df['x'].apply(lambda arr: arr[-1]))
-    start = min(df['x'].apply(lambda arr: arr[0]))
+def scatter_plot(series_df: pd.DataFrame, title: str = None):
+    """
+    Creates a scatter plot from the data in the provided DataFrame.
+
+    This function generates a scatter plot where each series in the DataFrame is plotted as a separate trace.
+    The x-axis represents time in milliseconds, and the y-axis represents the time between heartbeats (RR intervals).
+
+    Parameters:
+    - series_df (pd.DataFrame): DataFrame containing time series data. 
+                                The DataFrame should have columns 'x' (time points) and 'y' (RR intervals).
+    - title (str, optional): The title of the plot. If not provided, a default title will be generated based on the data.
+
+    Returns:
+    - fig (plotly.graph_objs._figure.Figure): The generated scatter plot figure.
+    - title (str): The title used for the plot.
     
-    names = df.index.tolist()
+    Raises:
+    - TypeError: If `series_df` is not a DataFrame or the 'x' and 'y' columns do not contain numpy arrays.
+    - ValueError: If the DataFrame is empty or lacks required columns.
+    """
+
+    # Validate the input DataFrame
+    validate_series_df(series_df, min_size=None, max_size=None)
+
+    # Determine the overall time range of the series
+    stop = max(series_df['x'].apply(lambda arr: arr[-1] if len(arr) > 0 else float('-inf')))
+    start = min(series_df['x'].apply(lambda arr: arr[0] if len(arr) > 0 else float('inf')))
+
+    # Generate names from the DataFrame index
+    names = series_df.index.tolist()
+
+    # Initialize the scatter plot
     fig = px.scatter()
-    
-    for i in range(df.shape[0]):
-        name = names[i].split()[0]
+
+    # Add each series as a scatter trace
+    for i in range(series_df.shape[0]):
+        name = names[i].split()[0]  # Use the first part of the index name
         
         fig.add_scatter(
-            x=df.iloc[i]['x'],
-            y=df.iloc[i]['y'],
+            x=series_df.iloc[i]['x'],
+            y=series_df.iloc[i]['y'],
             mode='markers',
             name=name
         )
-        
+
+    # Update plot layout
     fig.update_layout(
         xaxis_title="Time [ms]",
         yaxis_title="Time Between Heartbeats [ms]",
     )
-    
+
+    # Set the title if not provided
     if not title:
         title = f"{names} RANGE from {start} to {stop}"
-    
+
     fig.update_layout(title=title)
-    
+
     return fig, title
 
 #%%
-def density_plot(df, title=None):
-    names = df.index.tolist()
-    fig = go.Figure()
+def density_plot(series_df: pd.DataFrame, sd_threshold: float = 3, title: str = None):
+    """
+    Creates a density plot (histogram) for each time series in the provided DataFrame.
+
+    This function generates a density plot where each series in the DataFrame is plotted as a separate histogram trace.
+    Vertical lines indicating outliers (based on a specified standard deviation threshold) are added to each plot.
+
+    Parameters:
+    - series_df (pd.DataFrame): DataFrame containing time series data.
+                                The DataFrame should have an index with names and a 'y' column containing the RR intervals.
+    - sd_threshold (float, optional): The standard deviation multiplier for determining outliers. Default is 3.
+    - title (str, optional): The title of the plot. If not provided, a default title will be generated.
+
+    Returns:
+    - fig (plotly.graph_objs._figure.Figure): The generated density plot figure.
+    - title (str): The title used for the plot.
+
+    Raises:
+    - TypeError: If `series_df` is not a DataFrame, or if the 'y' column does not contain numpy arrays.
+    - ValueError: If the DataFrame is empty or lacks the required 'y' column.
+    - RuntimeError: If `series_df` contains non-numeric data that cannot be processed.
+    """
     
-    for i, y_data in enumerate(df['y']):
-        trace = go.Histogram(x=y_data, histnorm='probability density', name=names[i])
+    
+    # Validate the input DataFrame
+    validate_series_df(series_df, min_size=None, max_size=None)
+    
+    # Generate names from the DataFrame index
+    names = series_df.index.tolist()
+
+    # Initialize the density plot
+    fig = go.Figure()
+
+    # Add each series as a histogram trace
+    for i, y_data in enumerate(series_df['y']):
+        if not np.issubdtype(y_data.dtype, np.number):
+            raise RuntimeError(f"Non-numeric data found in 'y' column for index {names[i]}.")
+        
+        # Create the histogram trace
+        trace = go.Histogram(
+            x=y_data, 
+            histnorm='probability density', 
+            name=names[i],
+            opacity=0.75
+        )
         fig.add_trace(trace)
         
-        # Dodanie linii pionowych dla wartości odstających
-        outlier_low = round(np.mean(y_data) - 2 * np.std(y_data))
-        outlier_high = round(np.mean(y_data) + 2 * np.std(y_data))
+        # Calculate and add vertical lines for outliers
+        outlier_low = round(np.mean(y_data) - sd_threshold * np.std(y_data))
+        outlier_high = round(np.mean(y_data) + sd_threshold * np.std(y_data))
         trace_color = "gray"
-        fig.add_vline(x=outlier_low, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_Low_{names[i]} = {outlier_low}", annotation_position="top left", annotation_textangle=90)
-        fig.add_vline(x=outlier_high, line_dash="dash", line_color=trace_color, annotation_text=f"Outlier_High_{names[i]} = {outlier_high}", annotation_position="top right",  annotation_textangle=90)
+        
+        fig.add_vline(
+            x=outlier_low, 
+            line_dash="dash", 
+            line_color=trace_color,
+            annotation_text=f"Outlier Low {names[i]}: {outlier_low}", 
+            annotation_position="top left", 
+            annotation_textangle=90
+        )
+        
+        fig.add_vline(
+            x=outlier_high, 
+            line_dash="dash", 
+            line_color=trace_color,
+            annotation_text=f"Outlier High {names[i]}: {outlier_high}", 
+            annotation_position="top right",  
+            annotation_textangle=90
+        )
     
+    # Update plot layout
     fig.update_layout(
         xaxis_title="RR-interval [ms]",
         yaxis_title="Density",
+        barmode='overlay'  # Overlay histograms for better comparison
     )
     
+    # Set the title if not provided
     if title is None:
         title = "Distribution of RR-intervals"
     
     fig.update_layout(title=title)
-    
+
     return fig, title
 
 #%%
-def corr_heatmap(df, title=None, color='viridis'):
-    # Tworzenie własnej mapy kolorów z 20 odcieniami od -1 do 1
-    colors = sns.color_palette(color, 20)
-    cmap = LinearSegmentedColormap.from_list('custom_colormap', colors, N=20)
-    
-    with sns.axes_style("white"):
-        f, ax = plt.subplots(figsize=(10, 10))
-        sns.heatmap(df,
 # =============================================================================
-# to annotate on heatmap you need previous version of matplotlib              
-# pip install matplotlib==3.7.3
+# def corr_heatmap(df, title=None, color='viridis'):
+#     # Tworzenie własnej mapy kolorów z 20 odcieniami od -1 do 1
+#     colors = sns.color_palette(color, 20)
+#     cmap = LinearSegmentedColormap.from_list('custom_colormap', colors, N=20)
+#     
+#     with sns.axes_style("white"):
+#         f, ax = plt.subplots(figsize=(10, 10))
+#         sns.heatmap(df,
+# # =============================================================================
+# # to annotate on heatmap you need previous version of matplotlib              
+# # pip install matplotlib==3.7.3
+# # =============================================================================
+#                     annot=df.round(2),
+#                     vmax=1,
+#                     vmin=-1,
+#                     center=0,
+#                     square=True,
+#                     xticklabels=df.columns,
+#                     yticklabels=df.index,
+#                     cmap=cmap,
+#                     linewidths=.5,
+#                     cbar_kws={"shrink": 0.7, 'ticks': np.linspace(-1, 1, 21)})
+#         # Ustawienie rotacji etykiet
+#         ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
+#         ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+#     
+#     if not title:
+#         title = 'heatmap'
+#     
+#     plt.title(title)
+# 
+#     return f, title
 # =============================================================================
-                    annot=df.round(2),
-                    vmax=1,
-                    vmin=-1,
-                    center=0,
-                    square=True,
-                    xticklabels=df.columns,
-                    yticklabels=df.index,
-                    cmap=cmap,
-                    linewidths=.5,
-                    cbar_kws={"shrink": 0.7, 'ticks': np.linspace(-1, 1, 21)})
-        # Ustawienie rotacji etykiet
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
-        ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
-    
-    if not title:
-        title = 'heatmap'
-    
-    plt.title(title)
-
-    return f, title
 #%%
-def save_plot(fig, file_name, folder_name="out", format="png"):
-    # Sprawdzenie istnienia katalogu i jego utworzenie, jeśli nie istnieje
+def save_plot(fig, file_name: str, folder_name: str = "out", format: str = "png") -> None:
+    """
+    Save a given plot (either Plotly or Matplotlib) to a file in the specified format and directory.
+
+    This function saves a plot to a specified file format (such as PNG, JPG, SVG, PDF, or HTML) 
+    and ensures that the output directory exists. It supports both Plotly and Matplotlib figures.
+
+    Parameters:
+    fig (go.Figure or plt.Figure): The plot object to be saved. Can be a Plotly or Matplotlib figure.
+    file_name (str): The name of the file (without extension) to save the plot as.
+    folder_name (str): The name of the folder where the file will be saved. Defaults to "out".
+    format (str): The format in which to save the plot. Supported formats include "png", "jpg", 
+                  "svg", "pdf", and "html". Defaults to "png".
+
+    Returns:
+    None
+    """
+
+    # Ensure the output directory exists; create it if it does not
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
-        
-    # Utworzenie pełnej ścieżki do pliku wyjściowego
+
+    # Create the full path for the output file
     output_file_path = os.path.join(folder_name, f"{file_name}.{format}")
     
+    # Check if the figure is a Plotly figure
     if isinstance(fig, go.Figure):
         if format == "html":
-            # Zapisanie wykresu Plotly do pliku HTML
+            # Save the Plotly figure as an HTML file
             pio.write_html(fig, output_file_path)
         else:
-            # Zapisanie wykresu Plotly do pliku graficznego (PNG, JPG, SVG, PDF)
+            # Save the Plotly figure as an image file (PNG, JPG, SVG, PDF)
             fig.write_image(output_file_path, format=format)
+    
+    # Check if the figure is a Matplotlib figure
     elif isinstance(fig, plt.Figure):
         if format == "html":
-            # Zapisanie wykresu Matplotlib do pliku HTML za pomocą mpld3
+            # Save the Matplotlib figure as an HTML file using mpld3
             mpld3.save_html(fig, output_file_path)
         else:
-            # Zapisanie wykresu Matplotlib do pliku graficznego (PNG, JPG, SVG, PDF)
+            # Save the Matplotlib figure as an image file (PNG, JPG, SVG, PDF)
             fig.savefig(output_file_path, format=format)
     
-#%%
-def rename_index(df, idx, new_idx_name):      
-    new_index = list(df.index)
-    new_index[idx] = new_idx_name
-    df.index = new_index
+    # Raise an error if the figure is not a recognized type
+    else:
+        raise TypeError("The 'fig' parameter must be either a Plotly 'go.Figure' or a Matplotlib 'plt.Figure'.")
     
 #%%
-def trim(df, start=None, end=None):
-    df_copy = df.copy()
-    max_start = max(df_copy['x'].apply(lambda arr: arr[0]))
-    min_stop = min(df_copy['x'].apply(lambda arr: arr[-1]))
-    
-    # Ustawienie domyślnych wartości dla start_time i end_time
-    start_time = max_start
-    end_time = min_stop
+def trim(series_df, start=None, end=None):
+    """
+    Trims the data in the input DataFrame to the specified time range.
 
-    if start is None or start < max_start:
-        start_time = max_start
+    This function filters each row of the DataFrame to include only data within a specified time range.
+    If `start` and `end` are not provided, the function uses the minimum and maximum available time values
+    in the DataFrame. The function updates the `starttime`, `endtime`, and `duration` of each series accordingly.
+
+    Parameters:
+    series_df (pd.DataFrame): The DataFrame containing the series to be trimmed. It should have columns 'x', 'y', 'starttime', and 'endtime'.
+    start (int, optional): The start time (in milliseconds) for trimming. If None, the minimum start time in the DataFrame is used.
+    end (int, optional): The end time (in milliseconds) for trimming. If None, the maximum end time in the DataFrame is used.
+
+    Returns:
+    pd.DataFrame: A new DataFrame with the trimmed series, including updated `starttime`, `endtime`, and `duration`.
+
+    Raises:
+    KeyError: If the required columns 'x', 'y', 'starttime', or 'endtime' are missing in the DataFrame.
+    """
     
-    if end is None or end > min_stop:
-        end_time = min_stop
-        
+    validate_series_df(series_df, min_size=None, max_size=None)
     
-    for i in range(df_copy.shape[0]):
-        x=df_copy.iloc[i]['x']
-        y=df_copy.iloc[i]['y']
-        selected_indices_x = np.where((x >= start_time) & (x <= end_time))[0]
-        df_copy.iloc[i]['x'] = x[selected_indices_x]
-        df_copy.iloc[i]['y'] = y[selected_indices_x]
+    # Create a copy of the input DataFrame to avoid modifying the original
+    series_df = series_df.copy()
+    
+    # Determine the maximum start time and minimum end time from the data
+    max_start = max(series_df['x'].apply(lambda arr: arr[0]))
+    min_stop = min(series_df['x'].apply(lambda arr: arr[-1]))
+    
+    # Set default values for new_start and new_end
+    new_start = max_start if start is None or start < max_start else start
+    new_end = min_stop if end is None or end > min_stop else end
         
-    return df_copy
+    # Initialize the resulting DataFrame
+    trimmed_series_df = pd.DataFrame(columns=series_df.columns)
+    
+    # Iterate over each row in the DataFrame
+    for i in range(series_df.shape[0]):
+        x = series_df.iloc[i]['x']
+        y = series_df.iloc[i]['y']
+        
+        # Select indices within the specified time range
+        selected_indices_x = np.where((x >= new_start) & (x <= new_end))[0]
+        new_x = x[selected_indices_x]
+        new_y = y[selected_indices_x]
+        
+        starttime = series_df.iloc[i]['starttime']
+        new_starttime = starttime + pd.to_timedelta(new_x[0], unit='ms')
+        new_endtime = starttime + pd.to_timedelta(new_x[-1], unit='ms')
+        new_duration = (new_endtime - new_starttime).total_seconds() / 60
+        
+        # Update the row using the update_series function
+        updated_serie = update_series(
+            serie=series_df.iloc[[i]], 
+            x=new_x, 
+            y=new_y, 
+            starttime=new_starttime, 
+            endtime=new_endtime, 
+            duration=new_duration
+        )
+        
+        # Append the updated row to the resulting DataFrame
+        trimmed_series_df = pd.concat([trimmed_series_df, updated_serie], ignore_index=False)
+    
+    return trimmed_series_df
 
 #%%
-def interpolate(x, y, ix, method='linear'):
-    if not isinstance(x, (list, np.ndarray)):
-        x = [x]
-    if not isinstance(y, (list, np.ndarray)):
-        y = [y]
+def update_series(
+    serie: pd.DataFrame, 
+    x: np.ndarray = None, 
+    y: np.ndarray = None, 
+    shift: int = None, 
+    meas_name: str = None, 
+    starttime: pd.Timestamp = None, 
+    endtime: pd.Timestamp = None, 
+    duration: float = None, 
+    index: str = None
+) -> pd.DataFrame:
+    """
+    Updates a single-row DataFrame with new values for specified columns.
     
-    f = interp1d(x, y, kind=method, fill_value='extrapolate')
-    return f(ix).tolist()
-#%%
-def shift_series(df, shift_time_ms, index=0):
-    df_copy = df.copy()
-    df_copy.reset_index(drop=True, inplace=True)
+    Parameters:
+    - serie (pd.DataFrame): Input single-row DataFrame to be updated.
+    - x (np.ndarray, optional): New 'x' value.
+    - y (np.ndarray, optional): New 'y' value.
+    - shift (int, optional): New 'shift' value.
+    - meas_name (str, optional): New 'meas_name' value.
+    - starttime (pd.Timestamp, optional): New 'starttime' value.
+    - endtime (pd.Timestamp, optional): New 'endtime' value.
+    - duration (float, optional): New 'duration' value.
+    - index (str, optional): New index for the DataFrame.
     
-    result_df = pd.DataFrame(columns=df.columns)
-    new_index = []  # Lista przechowująca nowe indeksy
+    Returns:
+    - pd.DataFrame: Updated DataFrame with the new values.
+    """
     
-    for i in range(df_copy.shape[0]):
-        # Przypisanie wartości do DataFrame za pomocą metody `at`
-        result_df.at[i, 'x'] = df_copy.at[i, 'x'] + shift_time_ms
-        result_df.at[i, 'y'] = df_copy.at[i, 'y']
-        if index:
-            result_df.at[i, 'shift'] = int(pd.to_timedelta(shift_time_ms, unit='ms').total_seconds())
-        else:
-            result_df.at[i, 'shift'] = df_copy.at[i, 'shift']
-        result_df.at[i, 'meas_name'] = df_copy.at[i, 'meas_name']
-        result_df.at[i, 'starttime'] = df_copy.at[i, 'starttime']
-        result_df.at[i, 'endtime'] = df_copy.at[i, 'endtime']
-        result_df.at[i, 'duration'] = df_copy.at[i, 'duration']
+    # Validate that serie is a single-row DataFrame
+    validate_series_df(serie, min_size=1, max_size=1)
         
-        # Dodanie nowego indeksu do listy
-        new_index.append(df_copy.at[i, 'meas_name'] + "_" + str(result_df.at[i, 'shift']))
+    if x is not None:
+        if not isinstance(x, np.ndarray):
+            value_type = type(x)
+            raise TypeError("Input x must be a np.ndarray but is {value_type}.")
+        if x.size == 0:
+            raise ValueError("Input x is empty.")
+        if np.all(np.isnan(x)):
+            raise ValueError("Input x is NaN.")
+        new_x = x
+    else:
+        new_x = serie.iloc[0]['x']
+        
+    if y is not None:
+        if not isinstance(y, np.ndarray):
+            value_type = type(y)
+            raise TypeError(f"Input y must be a np.ndarray but is {value_type}.")
+        if y.size == 0:
+            raise ValueError("Input y is empty.")
+        if np.all(np.isnan(y)):
+            raise ValueError("Input y is NaN.")
+        new_y = y
+    else:
+        new_y = serie.iloc[0]['y']
     
-    # Przypisanie nowej listy indeksów do DataFrame
-    result_df.index = new_index
+    if shift is not None:
+        if not isinstance(shift, (int, float)):
+            value_type = type(shift)
+            raise TypeError(f"Input shift must be a (int, float) but is {value_type}.")
+        if shift == '':
+            raise ValueError("Input shift is empty.")
+        new_shift = shift
+    else:
+        new_shift = serie.iloc[0]['shift']
+        
+    if meas_name is not None:
+        if not isinstance(meas_name, str):
+            value_type = type(meas_name)
+            raise TypeError(f"Input meas_name must be a str but is {value_type}.")
+        if meas_name == '':
+            raise ValueError("Input meas_name is empty.")
+        new_meas_name = meas_name
+    else:
+        new_meas_name = serie.iloc[0]['meas_name']
+        
+    if starttime is not None:
+        if not isinstance(starttime, pd.Timestamp):
+            value_type = type(starttime)
+            raise TypeError(f"Input starttime must be a pd.Timestamp but is {value_type}.")
+        if pd.isna(starttime):
+            raise ValueError("Input starttime is empty.")
+        new_starttime = starttime
+    else:
+        new_starttime = serie.iloc[0]['starttime']
+
+    if endtime is not None:
+        if not isinstance(endtime, pd.Timestamp):
+            value_type = type(endtime)
+            raise TypeError(f"Input endtime must be a pd.Timestamp but is {value_type}.")
+        if pd.isna(endtime):
+            raise ValueError("Input endtime is empty.")
+        new_endtime = endtime
+    else:
+        new_endtime = serie.iloc[0]['endtime']
+
+    if duration is not None:
+        if not isinstance(duration, (int, float)):
+            value_type = type(duration)
+            raise TypeError(f"Input duration must be a (int, float) but is {value_type}.")
+        if math.isnan(duration):
+            raise ValueError("Input duration is NaN.")
+        new_duration = duration
+    else:
+        new_duration = serie.iloc[0]['duration']
+        
+    if index is not None:
+        if not isinstance(index, str):
+            value_type = type(index)
+            raise TypeError(f"Input index must be a str but is {value_type}.")
+        if index == '':
+            raise ValueError("Input index is empty.")
+        new_index = index
+    else:
+        new_index = serie.index[0]
+        
+    # Create a DataFrame with the new row of data
+    updated_serie = pd.DataFrame({
+        'x': [new_x],
+        'y': [new_y],
+        'shift': [new_shift],
+        'meas_name': [new_meas_name],
+        'starttime': [new_starttime],
+        'endtime': [new_endtime],
+        'duration': [new_duration]
+    }, index=[new_index])  
     
-    return result_df
+    # Validate that serie is a single-row DataFrame
+    validate_series_df(updated_serie, min_size=1, max_size=1)
+    
+    return updated_serie
 
 #%%
-def fisher_transform(r):
-    if r == 1:
+def validate_series_df(series_df: pd.DataFrame, min_size: int = None, max_size: int = None) -> bool:
+    """
+    Validates if a given DataFrame meets the required criteria for measurement data.
+
+    This function checks if a DataFrame:
+    - Is of the correct type.
+    - Contains no more than a specified number of rows.
+    - Includes all required columns.
+    - Contains data of the expected types within those columns.
+
+    Parameters:
+    - series_df (pd.DataFrame): The DataFrame to be validated.
+    - min_size (int, optional): The minimum number of allowed rows in the DataFrame. If `None`, no size limit is applied.
+    - max_size (int, optional): The maximum number of allowed rows in the DataFrame. If `None`, no size limit is applied.
+
+    Returns:
+    - bool: True if the DataFrame meets all the criteria, raises an error otherwise.
+
+    Raises:
+    - TypeError: If the input `df` is not a DataFrame.
+    - ValueError: If the DataFrame exceeds the maximum or minimum allowed number of rows.
+    - KeyError: If any of the required columns do not exist in the DataFrame.
+    - TypeError: If the data types within the columns do not match the expected types.
+    """
+
+    # Validate input type
+    if not isinstance(series_df, pd.DataFrame):
+        value_type = type(series_df)
+        raise TypeError(f"Input must be a pd.DataFrame but is {value_type}.")    
+    
+    # Ensure the DataFrame does not exceed the maximum allowed number of rows
+    if max_size is not None:
+        series_size = series_df.shape[0]
+        if series_size > max_size:
+            raise ValueError(f"The input DataFrame must contain no more than {max_size} rows but has {series_size} rows.")
+
+    # Ensure the DataFrame does not exceed the minimum allowed number of rows
+    if min_size is not None:
+        series_size = series_df.shape[0]
+        if series_size < min_size:
+            raise ValueError(f"The input DataFrame must contain no less than {min_size} rows but has {series_size} rows.")
+    
+    # Define required columns and their expected types
+    expected_columns = {
+        'x': np.ndarray,
+        'y': np.ndarray,
+        'shift': (int, float),
+        'meas_name': str,
+        'starttime': pd.Timestamp,
+        'endtime': pd.Timestamp,
+        'duration': (int, float)
+    }
+    
+    # Check for the presence of required columns and validate their data types
+    for col, expected_type in expected_columns.items():
+        if col not in series_df.columns:
+            raise KeyError(f"'{col}' does not exist in the DataFrame.")
+        
+        # Validate the type of data in the column
+        for i, value in enumerate(series_df[col]):
+            if not isinstance(value, expected_type):
+                value_type = type(value)
+                raise TypeError(f"The value in column '{col}' at row {i} must be of type {expected_type} but is {value_type}.")
+            
+    return True
+#%%
+def shift_series(series_df: pd.DataFrame, shift_time_ms: float = 0) -> pd.DataFrame:
+    """
+    Shifts the x-values (time series) in a DataFrame by a specified amount of time.
+
+    This function adjusts the x-values in the time series by adding a specified 
+    shift (in milliseconds) and updates other associated fields like `shift` 
+    and the row index accordingly.
+
+    Parameters:
+    series_df (pd.DataFrame): The input DataFrame containing time series data. 
+                              Each row represents a different series with columns 
+                              like 'x', 'y', 'meas_name', and others.
+    shift_time_ms (float): The amount of time (in milliseconds) by which to shift 
+                         the x-values.
+
+    Returns:
+    pd.DataFrame: A new DataFrame with the x-values shifted by the specified 
+                  amount and other associated fields updated.
+    """
+
+    # Ensure that updated_row is a DataFrame (handling case where it might be a Series)
+    if isinstance(series_df, pd.Series):
+        series_df = pd.DataFrame([series_df])  # Convert to DataFrame if necessary
+        
+    # Validate that series_df is a DataFrame
+    validate_series_df(series_df, min_size=None, max_size=None)
+    
+    # Create a copy of the DataFrame to avoid modifying the original
+    series_df = series_df.copy()
+    series_df.reset_index(drop=True, inplace=True)
+
+    # Initialize an empty DataFrame with the same columns as the original
+    shifted_df = pd.DataFrame(columns=series_df.columns)
+
+    # Iterate over each row in the DataFrame
+    for i in range(series_df.shape[0]):
+        # Shift the 'x' values by the specified time in milliseconds
+        new_x = series_df.at[i, 'x'] + shift_time_ms
+
+        # Calculate the new shift value in seconds
+        new_shift = int(pd.to_timedelta(shift_time_ms, unit='ms').total_seconds())
+
+        # Create a new index based on the measurement name and new shift
+        new_index = f"{series_df.at[i, 'meas_name']}_{new_shift}"
+
+        # Update the current row with the shifted data
+        updated_row = update_series(
+            serie=series_df.iloc[[i]],  # Wrapping in double brackets to ensure it remains a DataFrame
+            x=new_x,
+            y=None,
+            shift=new_shift,
+            meas_name=None,
+            starttime=None,
+            endtime=None,
+            duration=None,
+            index=new_index
+        )
+
+        # Ensure that updated_row is a DataFrame (handling case where it might be a Series)
+        if isinstance(updated_row, pd.Series):
+            updated_row = pd.DataFrame([updated_row])  # Convert to DataFrame if necessary
+        
+        # Append the updated row to the result DataFrame
+        shifted_df = pd.concat([shifted_df, updated_row], ignore_index=False)
+        
+        # Ensure that updated_row is a DataFrame (handling case where it might be a Series)
+        if isinstance(shifted_df, pd.Series):
+            shifted_df = pd.DataFrame([shifted_df])  # Convert to DataFrame if necessary
+        
+        # Validate that series_df is a DataFrame
+        validate_series_df(series_df, min_size=None, max_size=None)
+        
+    return shifted_df
+
+#%%
+def fisher_transform(x: float) -> float:
+    """
+    Applies the Fisher transformation to a correlation coefficient value.
+
+    The Fisher transformation is used to transform Pearson correlation 
+    coefficients into values that are approximately normally distributed, 
+    making them more suitable for hypothesis testing or confidence interval 
+    calculations.
+
+    Parameters:
+    x (float): The correlation coefficient value to transform. The value 
+               should be in the range [-1, 1].
+
+    Returns:
+    float: The transformed value. Returns `np.inf` if the input is 1, 
+           and `-np.inf` if the input is -1.
+
+    Notes:
+    - The function rounds the result to 4 decimal places for precision.
+    - The function will return positive or negative infinity if the input 
+      is exactly 1 or -1, respectively, as these values correspond to 
+      perfect correlation, where the Fisher transform is undefined.
+    """
+
+    # Handle special cases where the correlation coefficient is exactly 1 or -1
+    if x == 1:
         return np.inf
-    elif r == -1: 
+    elif x == -1: 
         return -np.inf
-    return round(0.5 * np.log((1 + r) / (1 - r)),4)
+    
+    # Apply the Fisher transformation and round the result to 4 decimal places
+    return round(0.5 * np.log((1 + x) / (1 - x)), 4)
 
 #%%
-def calculate_correlations(df1, df2):
-    n_rows = df1.shape[0]
-    n_columns = df2.shape[0]
-    correlation_matrix = np.empty((n_rows, n_columns))
-    p_value_matrix = np.empty((n_rows, n_columns))
+def interp_pair_uniform_time(pair_df: pd.DataFrame, ix_step: float, method: str = 'linear') -> pd.DataFrame:
+    """
+    Interpolates two signals to a common uniform time axis within their overlapping time range.
     
-    # Pobranie nazw kolumn i indeksów
-    index_names = df1.index.values
-    column_names = df2.index.values
+    Parameters:
+    pair_df (pd.DataFrame): DataFrame containing exactly two rows, each representing a signal with 'x' and 'y' values.
+    ix_step (float): Step size for the uniform time axis (in the same units as the 'x' values).
+    method (str): Interpolation method, e.g., 'linear', 'nearest', 'cubic'.
     
-    for i, (_, data1) in enumerate(df1.iterrows()):
-        for j, (_, data2) in enumerate(df2.iterrows()):
-            data = pd.DataFrame([data1, data2])
-            data.reset_index(drop=True, inplace=True)   
-            data = trim(data)
-            
-            x1 = data.iloc[0]['x']
-            y1 = data.iloc[0]['y']
-            x2 = data.iloc[1]['x']
-            y2 = data.iloc[1]['y']
-                        
-            common_x = np.union1d(x1, x2)
-            y1_interp = interp1d(x1, y1, kind='linear', fill_value='extrapolate')(common_x)
-            y2_interp = interp1d(x2, y2, kind='linear', fill_value='extrapolate')(common_x)
-            
-            correlation, p_value = pearsonr(y1_interp, y2_interp)
-            correlation_matrix[i, j] = fisher_transform(round(correlation,4))
-            p_value_matrix[i, j] = round(p_value,4)
-            
-    correlation_df = pd.DataFrame(correlation_matrix, index=index_names, columns=column_names)
-    p_value_df = pd.DataFrame(p_value_matrix, index=index_names, columns=column_names)
+    Returns:
+    pd.DataFrame: DataFrame containing the two signals interpolated to a common time axis.
     
-    return correlation_df, p_value_df
+    Raises:
+    ValueError: If the input DataFrame does not contain exactly two rows for comparison.
+    """
+    
+    # Ensure the DataFrame contains exactly two rows
+    validate_series_df(pair_df, min_size=2, max_size=2)
+    
+    # Extract x and y data for both signals
+    x1, y1 = pair_df.iloc[0]['x'], pair_df.iloc[0]['y']
+    x2, y2 = pair_df.iloc[1]['x'], pair_df.iloc[1]['y']
 
+    # Convert to numpy arrays if they are not already
+    x1 = np.array(x1) if not isinstance(x1, np.ndarray) else x1
+    y1 = np.array(y1) if not isinstance(y1, np.ndarray) else y1
+    x2 = np.array(x2) if not isinstance(x2, np.ndarray) else x2
+    y2 = np.array(y2) if not isinstance(y2, np.ndarray) else y2
 
+    # Determine the common time range between the two signals
+    max_common_x = min(np.max(x1), np.max(x2))
+    min_common_x = max(np.min(x1), np.min(x2))
+    
+    # Generate a new uniform time axis within the common range
+    ix = np.arange(min_common_x, max_common_x + ix_step, ix_step)
+    
+    # Interpolate both signals to the uniform time axis
+    iy1 = interp1d(x1, y1, kind=method, fill_value='extrapolate')(ix)
+    iy2 = interp1d(x2, y2, kind=method, fill_value='extrapolate')(ix)
+    
+    # Update the original rows with the interpolated data
+    interp_meas1 = update_series(pair_df.iloc[[0]], x=ix, y=iy1)
+    interp_meas2 = update_series(pair_df.iloc[[1]], x=ix, y=iy2)
+    
+    return pd.concat([interp_meas1, interp_meas2], ignore_index=False)
+    
 #%%
-def merge_meas(df):
-    df = df.sort_values(by='starttime')
-    result_df = pd.DataFrame(columns=df.columns)
+def merge_meas(series_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merges measurements in the provided DataFrame by concatenating 
+    time series data for entries with the same 'meas_name' and updates 
+    the metadata accordingly.
+
+    Parameters:
+    series_df (pd.DataFrame): A DataFrame containing time series data 
+                              with associated metadata, including 
+                              'meas_name', 'starttime', and 'endtime'.
+
+    Returns:
+    pd.DataFrame: A DataFrame with merged measurements where possible,
+                  with updated series data and metadata.
     
-    tmp_row_data = pd.DataFrame(columns=df.columns)  # Utwórz pustą ramkę danych poza pętlą
+    Notes:
+    - The function assumes that the input DataFrame `series_df` contains 
+      columns 'x', 'y', 'starttime', 'endtime', 'meas_name', and 'shift'.
+    - Measurements with the same 'meas_name' are merged based on their 
+      time series data and start/end times.
+    """
+
+    # Validate that serie is a DataFrame
+    validate_series_df(series_df, min_size=None, max_size=None)
     
-    for name, group in df.groupby('meas_name'):
+    # Sort the DataFrame by start time to ensure proper ordering for merging
+    series_df = series_df.sort_values(by='starttime')
+    
+    # Initialize an empty DataFrame with the same columns as the input
+    merged_df = pd.DataFrame(columns=series_df.columns)
+    
+    # Group the DataFrame by 'meas_name'
+    for meas_name, group in series_df.groupby('meas_name'):
         if group.shape[0] > 1:
+            # Calculate the time difference between consecutive measurements
             group['diff_ms'] = group['starttime'].diff().fillna(pd.Timedelta(seconds=0)).apply(lambda x: x.total_seconds() * 1000)
+            
+            # Adjust 'x' values by adding the cumulative sum of time differences
             group['x'] = group['x'] + group['diff_ms'].cumsum().astype(int)
             
-            starttime = group['starttime'].min()
-            endtime = group['endtime'].max()
-            duration = (endtime - starttime).total_seconds() / 60
-            
-            tmp_row_data = pd.DataFrame({'x': [np.concatenate(group['x'].values)],
-                                         'y': [np.concatenate(group['y'].values)],
-                                         'shift': [group.iloc[0]['shift']],
-                                         'meas_name': [name],
-                                         'starttime': [starttime],
-                                         'endtime': [endtime],
-                                         'duration': [duration]
-                                         }, index=[f"{name}_{group.iloc[0]['shift']}"])
+            # Merge the data by concatenating 'x' and 'y' values
+            updated_row = update_series(
+                serie=group.iloc[[0]],  # Use the first row as the base
+                x=np.concatenate(group['x'].values), 
+                y=np.concatenate(group['y'].values),
+                shift=group.iloc[0]['shift'],
+                meas_name=meas_name,
+                start_time=group['starttime'].min(), 
+                end_time=group['endtime'].max(), 
+                duration=(group['endtime'].max() - group['starttime'].min()).total_seconds() / 60,
+                index=f"{meas_name}_{group.iloc[0]['shift']}"
+            )
         else:
-            tmp_row_data = group  # Ustaw grupę jako wartość tmp_row_data, jeśli warunek nie jest spełniony
-            tmp_row_data.index = pd.Index([f"{name}_{group.iloc[0]['shift']}"], name='new_index_name')
-
-            
-        result_df = pd.concat([result_df, tmp_row_data])
-    
-    return result_df
-
-
-
-
-#%%
-def find_best_corr_pairs(correlation_df, p_value_df, meas_1, meas_2):
-    abs_correlation_df = correlation_df.abs()
-    max_value = abs_correlation_df.max().max()
-    max_locations = (abs_correlation_df == max_value).stack().reset_index()
-    max_locations = max_locations[max_locations[0]].iloc[:, :-1]
-
-    # Wybierz odpowiednie pary z max_locations
-    pairs = max_locations[(max_locations['level_0'].isin(meas_1.index)) & (max_locations['level_1'].isin(meas_2.index))]
-    
-    # Wybierz odpowiednie pomiary z meas_1 i meas_2
-    selected_meas_1 = meas_1.loc[pairs['level_0']]
-    selected_meas_2 = meas_2.loc[pairs['level_1']]
-    
-    result_df = pd.DataFrame({
-        'indeks_1': selected_meas_1.index,
-        #'meas_name_1': selected_meas_1['meas_name'].values,
-        'shift_1': selected_meas_1['shift'].values,
-        'indeks_2': selected_meas_2.index,
-        #'meas_name_2': selected_meas_2['meas_name'].values,
-        'shift_2': selected_meas_2['shift'].values,
-        'shift_diff': selected_meas_1['shift'].values - selected_meas_2['shift'].values
-    })
-    
-    # Znajdź indeksy kolumn i wierszy dla wybranych par
-    row_indices = pairs['level_0'].values
-    column_indices = pairs['level_1'].values
-    
-
-    correlation_values = []
-    p_value_values = []
-    
-    # Pętla po wszystkich parach indeksów
-    for row_index, column_index in zip(row_indices, column_indices):
-        corr = correlation_df.at[row_index, column_index]
-        p_val = p_value_df.at[row_index, column_index]
+            # If there is only one measurement, just update its index
+            updated_row = update_series(
+                serie=group.iloc[[0]],
+                index=f"{meas_name}_{group.iloc[0]['shift']}"
+            )
         
-        correlation_values.append(corr)
-        p_value_values.append(p_val)
+        # Append the updated row to the merged DataFrame
+        merged_df = pd.concat([merged_df, updated_row], ignore_index=False)
     
-    result_df['corr'] = correlation_values
-    result_df['p_val'] = p_value_values
-
-    # Znajdź indeks (wiersz) gdzie kolumna shift_diff ma wartość najbliższą 0
-    min_diff = result_df['shift_diff'].abs().min()
-    # Wybierz wszystkie wiersze, gdzie wartość shift_diff jest równa najmniejszej różnicy
-    result_df = result_df[result_df['shift_diff'].abs() == min_diff]
-    
-    
-    # Znajdź najmniejszą wartość spośród kolumn 'shift_1' i 'shift_2'
-    min_shift_value = result_df[['shift_1', 'shift_2']].values.min()
-    # Wybierz ten wiersz, w którym 'shift_1' lub 'shift_2' ma najmniejszą wartość
-    result_df = result_df[(result_df['shift_1'] == min_shift_value) | (result_df['shift_2'] == min_shift_value)]
-
-    return result_df
+    return merged_df
 
 #%%
-def extract_numeric_suffix(text):
-    match = re.search(r'\d+$', text)
+def extract_numeric_suffix(text: str):
+    """
+    Extracts the numeric suffix from a given string.
+
+    This function searches for a sequence of digits at the end of the input string. 
+    If found, it returns the numeric suffix as an integer. If no numeric suffix is found, it returns None.
+
+    Parameters:
+    text (str): The input string from which the numeric suffix is to be extracted.
+
+    Returns:
+    int or None: The numeric suffix as an integer if found, otherwise None.
+    """
+    match = re.search(r'\d+$', text)  # Search for digits at the end of the string
     if match:
-        return int(match.group())
+        return int(match.group())  # Return the matched digits as an integer
     else:
-        return None
+        return None  # Return None if no digits are found
 
 #%%
-def find_pairs(df, index=0):
-    matching_pairs = set()  # Używamy zbioru do przechowywania unikalnych par
-    for index_1, row_1 in df.iterrows():
-        for index_2, row_2 in df.iterrows():
-            numeric_suffix_1 = extract_numeric_suffix(row_1['meas_name'])
-            numeric_suffix_2 = extract_numeric_suffix(row_2['meas_name'])
-            if (row_1['meas_name'][:2] == row_2['meas_name'][:2] and
-                    row_1['meas_name'][2] == 'm' and row_2['meas_name'][2] == 'k' and
-                    numeric_suffix_1 is not None and numeric_suffix_2 is not None and
-                    numeric_suffix_1 == numeric_suffix_2):
-                if index:
-                    matching_pairs.add((index_1, index_2))  # Dodajemy parę indeksów do zbioru
-                else:
-                    matching_pairs.add((row_1['meas_name'], row_2['meas_name']))  # Dodajemy parę nazw do zbioru
+def find_pairs(series_df: pd.DataFrame, serie_1_letter_suffix: str = 'm', serie_2_letter_suffix: str = 'k', index: bool = False):
+    """
+    Finds matching pairs of series in a DataFrame based on their measurement names.
+
+    This function identifies pairs of series whose measurement names share the same prefix and numeric suffix,
+    but differ by a specific letter suffix. It returns the matching pairs along with any unmatched measurements.
+
+    Parameters:
+    series_df (pd.DataFrame): The DataFrame containing the series data. It should have a column 'meas_name' 
+                              with measurement names to be compared.
+    serie_1_letter_suffix (str, optional): The letter suffix to be matched in the first series. Defaults to 'm'.
+    serie_2_letter_suffix (str, optional): The letter suffix to be matched in the second series. Defaults to 'k'.
+    index (bool, optional): If True, returns pairs of indices. If False, returns pairs of measurement names. Defaults to False.
+
+    Returns:
+    tuple:
+        - list of tuples: Each tuple contains a pair of matching indices or measurement names based on the `index` parameter.
+        - list of str: Measurement names that do not have a matching pair.
+    """
     
-    # Konwertujemy zestawy na krotki
+    # Validate that serie is a DataFrame
+    validate_series_df(series_df, min_size=None, max_size=None)
+    
+    matching_pairs = set()  # Use a set to store unique pairs
+    
+    for index_1, row_1 in series_df.iterrows():
+        for index_2, row_2 in series_df.iterrows():
+            serie_1_numeric_suffix = extract_numeric_suffix(row_1['meas_name'])
+            serie_2_numeric_suffix = extract_numeric_suffix(row_2['meas_name'])
+            
+            # Check if the measurements match the specified criteria
+            if (row_1['meas_name'][:2] == row_2['meas_name'][:2] and
+                    row_1['meas_name'][2] == serie_1_letter_suffix and row_2['meas_name'][2] == serie_2_letter_suffix and
+                    serie_1_numeric_suffix is not None and serie_2_numeric_suffix is not None and
+                    serie_1_numeric_suffix == serie_2_numeric_suffix):
+                
+                if index:
+                    matching_pairs.add((index_1, index_2))  # Add index pair to the set
+                else:
+                    matching_pairs.add((row_1['meas_name'], row_2['meas_name']))  # Add measurement name pair to the set
+    
+    # Convert set to list of tuples
     matching_pairs = [tuple(pair) for pair in matching_pairs]
     
-    all_meas_names = set(df['meas_name'])  # Zbierz wszystkie unikalne nazwy pomiarów z df['meas_name']
-
-    # Sprawdź, które pomiary nie są w `matching_pairs`
+    # Gather all unique measurement names
+    all_meas_names = set(series_df['meas_name'])
+    
+    # Identify measurements that do not have a matching pair
     unmatched_meas = all_meas_names - set(pair[0] for pair in matching_pairs) - set(pair[1] for pair in matching_pairs)
     
     return matching_pairs, list(unmatched_meas)
     
 #%%
-def calculate_time_difference(row1, row2):
-    starttime1 = pd.to_datetime(row1['starttime'].iloc[0])
-    starttime2 = pd.to_datetime(row2['starttime'].iloc[0])
+def calculate_pair_time_difference(pair_df: pd.DataFrame, time: str) -> pd.DataFrame:
+    """
+    Calculate the time difference in milliseconds between two signals based on their start or end times.
     
-    if isinstance(starttime1, pd.Timestamp) and isinstance(starttime2, pd.Timestamp):
-        diff_start_time_ms = (starttime1 - starttime2).total_seconds() * 1000
+    Parameters:
+    pair_df (pd.DataFrame): DataFrame containing exactly two rows representing the two signals to compare.
+    time (str): A string specifying the time to compare ('starttime' or 'endtime').
+    
+    Returns:
+    pd.DataFrame: A DataFrame containing the names of the signals and the time difference in milliseconds.
+    
+    Raises:
+    ValueError: If the input DataFrame does not contain exactly two rows or if the specified time is invalid.
+    """
+    
+    # Ensure the DataFrame contains exactly two rows
+    validate_series_df(pair_df, min_size=2, max_size=2)
+    
+    # Extract the two series from the DataFrame
+    serie_1 = pair_df.iloc[0]
+    serie_2 = pair_df.iloc[1]
+    
+    # Check and calculate time difference based on the specified time ('starttime' or 'endtime')
+    if time == 'starttime':
+        time1 = pd.to_datetime(serie_1['starttime'])
+        time2 = pd.to_datetime(serie_2['starttime'])
+    elif time == 'endtime':
+        time1 = pd.to_datetime(serie_1['endtime'])
+        time2 = pd.to_datetime(serie_2['endtime'])
     else:
-        diff_start_time_ms = np.nan
-
-    pair_df = pd.DataFrame({
-        'meas_name_1': [row1['meas_name'].iloc[0]],
-        'meas_name_2': [row2['meas_name'].iloc[0]],
-        'diff_start_time_ms': [diff_start_time_ms]
+        raise ValueError("The 'time' parameter must be either 'starttime' or 'endtime'.")
+    
+    # Calculate the time difference in milliseconds if both times are valid Timestamps
+    if isinstance(time1, pd.Timestamp) and isinstance(time2, pd.Timestamp):
+        diff_time_ms = (time1 - time2).total_seconds() * 1000
+    else:
+        diff_time_ms = np.nan  # Handle invalid Timestamps by setting the difference to NaN
+    
+    # Create a DataFrame to store the results
+    pair_time_diff = pd.DataFrame({
+        'meas_name_1': [serie_1['meas_name']],
+        'meas_name_2': [serie_2['meas_name']],
+        'diff_time_ms': [diff_time_ms]
     })
     
-    return pair_df
+    return pair_time_diff
 
 #%%
-def remove_outliers(rr):
-    outlier_low = round(np.nanmean(rr) - 2 * np.nanstd(rr))
-    outlier_high = round(np.nanmean(rr) + 2 * np.nanstd(rr))
-        
-    # Zmiana wartości odstających na np.nan
+def time_align_pair(pair_df: pd.DataFrame, time_ms_threshold: float) -> pd.DataFrame:
+    """
+    Align the start times of two signals within a specified time threshold by shifting one of the signals.
+    
+    Parameters:
+    pair_df (pd.DataFrame): DataFrame containing exactly two rows representing the two signals to be aligned.
+    time_ms_threshold (float): The time difference threshold in milliseconds within which the signals should be aligned.
+    
+    Returns:
+    pd.DataFrame: A DataFrame containing the aligned signals.
+    
+    Raises:
+    ValueError: If the input DataFrame does not contain exactly two rows for comparison.
+    """
+    
+    # Ensure the DataFrame contains exactly two rows
+    validate_series_df(pair_df, min_size=2, max_size=2)
+    
+    # Calculate the time difference between the start times of the two signals
+    diff_start_time_ms = calculate_pair_time_difference(pair_df, time='starttime')
+    
+    # Extract the two series from the DataFrame
+    serie_1 = pd.DataFrame([pair_df.iloc[0]])
+    serie_2 = pd.DataFrame([pair_df.iloc[1]])
+    
+    # Save the indexes of the two series into separate variables
+    index_serie_1 = serie_1.index[0]
+    index_serie_2 = serie_2.index[0]
+    
+    shift_serie_1 = float(serie_1.iloc[0]['shift'])
+    shift_serie_2 = float(serie_2.iloc[0]['shift'])
+    
+    # Align the start times by shifting one of the signals if the difference exceeds the threshold
+    if diff_start_time_ms['diff_time_ms'].iloc[0] > time_ms_threshold:
+        serie_2 = shift_series(serie_2, shift_time_ms=diff_start_time_ms['diff_time_ms'].iloc[0].item() - time_ms_threshold)
+    elif diff_start_time_ms['diff_time_ms'].iloc[0] < -time_ms_threshold: 
+        serie_1 = shift_series(serie_1, shift_time_ms=abs(diff_start_time_ms['diff_time_ms'].iloc[0].item()) - time_ms_threshold)
+    
+    validate_series_df(serie_1, min_size=1, max_size=1)
+    validate_series_df(serie_2, min_size=1, max_size=1)
+    
+    serie_1 = update_series(
+        serie=serie_1,
+        shift=shift_serie_1,
+        index=index_serie_1        
+        )
+    
+    serie_2 = update_series(
+        serie=serie_2,
+        shift=shift_serie_2,
+        index=index_serie_2        
+        )
+    
+    # Concatenated DataFrame of the aligned signals
+    aligned_df = pd.concat([serie_1, serie_2]) 
+    
+    return aligned_df
+
+#%%
+def filter_rr_intervals_by_sd(rr: np.ndarray, sd_threshold: float = 3) -> np.ndarray:
+    """
+    Filters RR intervals by replacing outliers with NaN based on a standard deviation threshold.
+
+    This function identifies outliers in the RR intervals based on a given standard deviation threshold.
+    Outliers are defined as values that fall outside the range of mean ± (sd_threshold * standard deviation).
+
+    Parameters:
+    rr (np.ndarray): An array of RR intervals.
+    sd_threshold (int, optional): The number of standard deviations used to define outliers. Default is 3.
+
+    Returns:
+    np.ndarray: The filtered array with outlier values replaced by NaN.
+    """
+    # Ensure the input is a numpy array of floats
+    if not isinstance(rr, np.ndarray):
+        raise TypeError("Input must be a numpy array.")
+    
+    # Convert to float if necessary to handle NaN values
+    if not np.issubdtype(rr.dtype, np.floating):
+        rr = rr.astype(float)
+    
+    # Compute the mean and standard deviation of the RR intervals, ignoring NaNs
+    mean_rr = np.nanmean(rr)
+    std_rr = np.nanstd(rr)
+    
+    # Calculate the lower and upper bounds for outliers
+    outlier_low = mean_rr - sd_threshold * std_rr
+    outlier_high = mean_rr + sd_threshold * std_rr
+    
+    # Identify and replace outliers with NaN
     mask = (rr < outlier_low) | (rr > outlier_high)
     rr[mask] = np.nan
-        
-    mean_prev_next = np.array([
-        np.nan if i == 0 or i == len(rr) - 1 else np.nanmean([rr[i-1], rr[i+1]])
-        for i in range(len(rr))
-    ])
+    
+    return rr
+
+#%%
+def filter_rr_intervals_by_relative_mean(rr: np.ndarray, threshold_factor: float) -> np.ndarray:
+    """
+    Filters RR intervals by replacing values that deviate more than a specified percentage from the average
+    of the previous and next RR intervals with NaN. This function handles NaN values in the input array.
+
+    Parameters:
+    rr (np.ndarray): An array of RR intervals, which may contain NaN values.
+    threshold_factor (float): The percentage threshold used to define outliers. For example, 0.1 means that
+                              intervals deviating more than 10% from the average of their neighbors are considered outliers.
+
+    Returns:
+    np.ndarray: The filtered array with outlier values replaced by NaN.
+    """
+    
+    # Ensure the input is a numpy array
+    if not isinstance(rr, np.ndarray):
+        raise TypeError("Input must be a numpy array.")
+    
+    if rr.size < 3:
+        raise ValueError("Input array must contain at least three valid elements.")
+    
+    # Create a copy of the array to avoid modifying the original data
+    filtered_rr = rr.copy()
+    
+    # Calculate the mean of previous and next RR intervals, ignoring NaN values
+    mean_prev_next = np.full_like(rr, np.nan, dtype=float)  # Initialize with NaN
     
     for i in range(1, len(rr) - 1):
-        if np.isnan(mean_prev_next[i]):
-            continue
-        if rr[i] > 1.2 * mean_prev_next[i] or rr[i] < 0.8 * mean_prev_next[i]:
-            rr[i] = np.nan
-            
-    return rr
+        prev_rr = rr[i - 1]
+        next_rr = rr[i + 1]
+        
+        if not np.isnan(prev_rr) and not np.isnan(next_rr):
+            mean_prev_next[i] = np.nanmean([prev_rr, next_rr])
+    
+    # Replace outliers with NaN
+    for i in range(1, len(rr) - 1):
+        if not np.isnan(mean_prev_next[i]):
+            if rr[i] > (1 + threshold_factor) * mean_prev_next[i] or rr[i] < (1 - threshold_factor) * mean_prev_next[i]:
+                filtered_rr[i] = np.nan
+    
+    return filtered_rr
 
 #%%
 def interpolate_nan_values(rr: np.ndarray) -> np.ndarray:
-    # Znalezienie indeksów nan
+    """
+    Interpolates NaN values in a NumPy array using linear interpolation based on non-NaN values.
+    
+    Parameters:
+    rr (np.ndarray): A 1D NumPy array containing RR intervals, which may include NaN values.
+    
+    Returns:
+    np.ndarray: The input array with NaN values replaced by interpolated values.
+    
+    Notes:
+    - The function uses linear interpolation to estimate NaN values based on their surrounding non-NaN values.
+    - If the input array does not contain any NaN values, the function will return the array unchanged.
+    """
+    
+    # Find indices of NaN values
     nans = np.isnan(rr)
+    
     if np.any(nans):
-        # Indeksy, które nie są nan
+        # Indices that are not NaN
         not_nans = ~nans
         x = np.arange(len(rr))
-        # Interpolacja wartości nan
-        rr[nans] = np.interp(x[nans], x[not_nans], rr[not_nans])
         
+        # Interpolate NaN values using linear interpolation
+        rr[nans] = np.interp(x[nans], x[not_nans], rr[not_nans])
+    
     return rr
 
 #%%
-def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
-    result_df = pd.DataFrame(columns=df.columns)  
-    for i in range(len(df)):
-        rr = df.iloc[i]['y']
-        rr = np.array(rr, dtype=float)  # Konwertowanie rr na ndarray typu float
-        
-        rr = remove_outliers(rr)
-        rr = interpolate_nan_values(rr)
-        
-        x = np.cumsum(rr)
-        starttime = df.iloc[i]['starttime']
-        endtime = starttime + pd.to_timedelta(x[-1], unit='ms')
-        duration = (endtime - starttime).total_seconds() / 60
-    
-        tmp_row_data = pd.DataFrame({'x': [x],
-                                     'y': [rr],
-                                     'shift': [df.iloc[i]['shift']],
-                                     'meas_name': [df.iloc[i]['meas_name']],
-                                     'starttime': [starttime],
-                                     'endtime': [endtime],
-                                     'duration': [duration]
-                                     }, index=[df.index[i]])
-    
-        result_df = pd.concat([result_df, tmp_row_data])
-    
-    return result_df
+def filter_series(series_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filters and updates each series in the provided DataFrame by applying 
+    several processing steps including outlier removal, interpolation, and 
+    updating series attributes.
 
+    Parameters:
+    series_df (pd.DataFrame): A DataFrame where each row contains a time series
+                              with RR intervals and metadata.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the filtered and updated series.
+    
+    Notes:
+    - The function assumes that the DataFrame `series_df` has columns 'x', 'y', 
+      'starttime', and 'endtime', where 'x' and 'y' are NumPy arrays of RR intervals.
+    - The functions `filter_rr_intervals_by_sd` and `filter_rr_intervals_by_relative_mean` 
+      are used to filter out RR intervals based on standard deviation and relative mean.
+    - The function `interpolate_nan_values` is used to handle NaN values in the RR intervals.
+    - The function `update_series` is used to create a DataFrame with updated series data.
+    """
+    # Validate that serie is a DataFrame
+    validate_series_df(series_df, min_size=None, max_size=None)
+    
+    # Initialize an empty DataFrame with the same columns as the input DataFrame
+    filtered_series_df = pd.DataFrame(columns=series_df.columns)
+    
+    for i in range(len(series_df)):
+        # Extract the RR intervals for the current row
+        rr = series_df.iloc[i]['y']
+        
+        if not isinstance(rr, np.ndarray):
+            raise TypeError("RR intervals must be a numpy array.")
+        
+        # Apply filtering to remove outliers based on standard deviation and relative mean
+        filtered_rr = filter_rr_intervals_by_sd(rr, sd_threshold=3)
+        filtered_rr = filter_rr_intervals_by_relative_mean(filtered_rr, threshold_factor=0.2)
+        
+        # Interpolate NaN values in the filtered RR intervals
+        nn = interpolate_nan_values(filtered_rr)
+        
+        # Calculate new x values and time attributes
+        new_x = np.cumsum(nn)
+        new_starttime = series_df.iloc[i]['starttime']
+        new_endtime = new_starttime + pd.to_timedelta(new_x[-1], unit='ms')
+        new_duration = (new_endtime - new_starttime).total_seconds() / 60
+        
+        # Update the row with new data and append to the result DataFrame
+        updated_row = update_series(
+            serie=pd.DataFrame([series_df.iloc[i]]),
+            x=new_x,
+            y=nn,
+            shift=None,  # Assuming no change in shift
+            meas_name=None,  # Assuming no change in measurement name
+            starttime=None,  # Assuming no change in start time
+            endtime=new_endtime,
+            duration=new_duration,
+            index=None  # Assuming no change in index
+        )
+        
+        filtered_series_df = pd.concat([filtered_series_df, updated_row], ignore_index=False)
+    
+    return filtered_series_df
 
 #%%
-def process_rr_pair_data(df, folder_name, group_label, start_time, end_time):
-    matching_pairs, unmatched_meas = find_pairs(df)
+def calc_corr(pair_df: pd.DataFrame):
+    """
+    Calculates the Pearson correlation coefficient and p-value for two time series 
+    in a DataFrame, after trimming and interpolating them to a uniform time grid.
+
+    Parameters:
+    -----------
+    pair_df : pd.DataFrame
+        A DataFrame containing two time series to be compared. 
+        The DataFrame should have columns 'x' (time), 'y' (signal values), 
+        and 'shift' (time shift) for each series.
+
+    Returns:
+    --------
+    corr_result : pd.DataFrame
+        A DataFrame containing the correlation coefficient (`corr`), p-value (`p_val`), 
+        the indices of the two series (`serie_1`, `serie_2`), and the difference 
+        in time shifts (`shift_diff`) between the two series.
     
-    result_df = pd.DataFrame(columns=['group_label', 'indeks_1', 'shift_1', 'indeks_2', 'shift_2', 'shift_diff', 'corr', 'p_val'])
-    diff_start_time_ms_df = pd.DataFrame(columns=['meas_name_1', 'meas_name_2','diff_start_time_ms'])
+    interp_pair_df : pd.DataFrame
+        The interpolated DataFrame containing the two series after trimming and 
+        interpolation on a uniform time grid.
+    """
+    # Validate that serie is a 2 row DataFrame
+    validate_series_df(pair_df, min_size=2, max_size=2)
     
+    # Trim the pair of series to the common time range
+    trimmed_pair_df = trim(pair_df)
+    
+    # Interpolate both series to a uniform time grid
+    interp_pair_df = interp_pair_uniform_time(trimmed_pair_df, ix_step=250, method='linear')
+    
+    # Extract the interpolated series
+    serie_1 = pd.DataFrame([interp_pair_df.iloc[0]])
+    serie_2 = pd.DataFrame([interp_pair_df.iloc[1]])
+    
+    # Calculate the Pearson correlation coefficient and p-value
+    corr, p_val = pearsonr(serie_1['y'].iloc[0], serie_2['y'].iloc[0])
+    
+    # Prepare the result DataFrame with correlation results and series information
+    corr_result = pd.DataFrame({
+    'corr': [corr],
+    'p_val': [p_val],
+    'serie_1': [str(serie_1.index[0])],  # Index of the first series
+    'serie_2': [str(serie_2.index[0])],  # Index of the second series
+    'shift_diff': [serie_1['shift'].iloc[0] - serie_2['shift'].iloc[0]]  # Time shift difference
+    })
+    
+    return corr_result, interp_pair_df
+
+#%%
+def process_rr_data(series_df: pd.DataFrame, group_label: str, start_time_ms: int, end_time_ms: int) -> pd.DataFrame:
+    """
+    Processes RR interval data by finding matching pairs, aligning them in time,
+    trimming to specific time frames, and calculating correlations. Generates and 
+    saves various plots during the process.
+
+    Parameters:
+    - series_df (pd.DataFrame): The input DataFrame containing series data.
+    - group_label (str): The label used for grouping in the output files.
+    - start_time_ms (int): The start time for trimming the series (in milliseconds).
+    - end_time_ms (int): The end time for trimming the series (in milliseconds).
+
+    Returns:
+    - pd.DataFrame: DataFrame containing the best correlation results.
+    """
+
+    # Validate that series_df is a DataFrame
+    validate_series_df(series_df, min_size=None, max_size=None)
+    
+    # Find matching pairs and unmatched series
+    matching_pairs, unmatched_series = find_pairs(series_df)
+    
+    best_corr_results = []
+    best_interp_pairs_df = []
+    
+    # Process each matching pair
     for pair in matching_pairs:
-        meas_1 = df.loc[df.meas_name == pair[0]].iloc[[0]]
-        meas_2 = df.loc[df.meas_name == pair[1]].iloc[[0]]
+        # Extract the corresponding rows from series_df for the given pair
+        pair_df = series_df.loc[series_df['meas_name'].isin(pair)].iloc[[0, 1]]
+        
+        # Align the pair in time
+        pair_df = time_align_pair(pair_df, time_ms_threshold=1000)
+        
+        # Trim the pair to the specified time frame
+        trimmed_pair_df = trim(pair_df, start_time_ms, end_time_ms)
+        
+        # Generate and save a histogram plot for the trimmed pair
+        output_plot_folder = os.path.join(output_folder, "hist_pairs_trimmed", group_label)
+        fig_hist, title_hist = density_plot(trimmed_pair_df, title=f"{pair}_Distribution of RR-intervals")
+        save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
+        
+        # Generate and save a scatter plot for the trimmed pair
+        output_plot_folder = os.path.join(output_folder, "scatter_pairs_trimmed", group_label)
+        fig_scatter, title_scatter = scatter_plot(trimmed_pair_df)
+        save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+        
+        # Filter the trimmed pair to remove outliers or unwanted data
+        filtered_pair_df = filter_series(trimmed_pair_df)
+        
+        # Generate and save a histogram plot for the filtered pair
+        output_plot_folder = os.path.join(output_folder, "hist_pairs_filtered", group_label)
+        fig_hist, title_hist = density_plot(filtered_pair_df, title=f"{pair}_Distribution of RR-intervals")
+        save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
+        
+        # Generate and save a scatter plot for the filtered pair
+        output_plot_folder = os.path.join(output_folder, "scatter_pairs_filtered", group_label)
+        fig_scatter, title_scatter = scatter_plot(filtered_pair_df)
+        save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+        
+        # Initialize lists to store correlation results
+        calc_corr_results = []
     
-        diff_start_time_ms = calculate_time_difference(meas_1, meas_2)    
-        if(diff_start_time_ms['diff_start_time_ms'].iloc[0] > 1000):
-            meas_2 = shift_series(meas_2, shift_time_ms = diff_start_time_ms['diff_start_time_ms'].iloc[0].item() - 1000, index=0)
-        elif(diff_start_time_ms['diff_start_time_ms'].iloc[0] <- 1000): 
-            meas_1 = shift_series(meas_1, shift_time_ms=abs(diff_start_time_ms['diff_start_time_ms'].iloc[0].item()) - 1000, index=0)
+        # Calculate correlation for the initial pair without time shift
+        calc_corr_result, interp_pair_df = calc_corr(filtered_pair_df)
+        calc_corr_results.append(calc_corr_result)
         
-        meas_1 = trim(meas_1, start_time, end_time)
-        meas_2 = trim(meas_2, start_time, end_time)
-        meas_df = pd.concat([meas_1, meas_2])
-        
-
-        
-        fig_hist, title_hist = density_plot(meas_df, title=f"{pair}_Distribution of RR-intervals")
-        save_plot(fig_hist, title_hist, folder_name=f"out/hist_pairs_{folder_name}/{group_label}", format="html")
-        
+        # Generate and save a scatter plot for the interp pair
+        output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
+        fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+        save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
     
-        fig_scatter, title_scatter = scatter_plot(meas_df)
-        save_plot(fig_scatter, title_scatter, folder_name=f"out/scatter_pairs_{folder_name}/{group_label}", format="html")
+        # Obtain the two series from the trimmed pair
+        serie_1 = pd.DataFrame([trimmed_pair_df.iloc[0]])
+        serie_2 = pd.DataFrame([trimmed_pair_df.iloc[1]])
         
-        shifted_df = meas_df.copy()
-        for i in range(1000, 10001, 1000):
-            shifted_df = pd.concat([shifted_df, shift_series(meas_df, i, index=1)])
-        
-        meas_1 = shifted_df.loc[shifted_df.meas_name == pair[0]]
-        meas_2 = shifted_df.loc[shifted_df.meas_name == pair[1]]
-        
-        correlation_matrix, p_value_matrix = calculate_correlations(meas_1, meas_2)
-        best_corr_row = find_best_corr_pairs(correlation_matrix, p_value_matrix, meas_1, meas_2)
-        
-        # Dodanie nowej kolumny 'group_label' z wartością ze zmiennej group_label
-        best_corr_row['group_label'] = group_label
-        
-        result_df = pd.concat([result_df, best_corr_row], ignore_index=True)
-        diff_start_time_ms_df = pd.concat([diff_start_time_ms_df, diff_start_time_ms], ignore_index=True)
+        # Iterate over various time shift values
+        for shift_ms in range(1000, 5001, 1000):
+            shifted_serie_2 = shift_series(serie_2, shift_ms)    
+            calc_corr_result, interp_pair_df = calc_corr(pd.concat([serie_1, shifted_serie_2], ignore_index=False))
+            calc_corr_results.append(calc_corr_result)
+            
+            # Generate and save a scatter plot for the interp pair
+            output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
+            fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+            save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
     
-
-        fig_heatmap, title_heatmap = corr_heatmap(correlation_matrix, title="corr_heatmap_" + '_'.join(pair), color='coolwarm')
-        save_plot(fig_heatmap, title_heatmap, folder_name=f"out/corr_heatmap_{folder_name}/{group_label}", format="png")
-
-    return result_df #selected_df, merged_df, unmatched_meas, diff_start_time_ms_df
-
-
-
+            # Repeat for shifting the other series
+            shifted_serie_1 = shift_series(serie_1, shift_ms)
+            calc_corr_result, interp_pair_df = calc_corr(pd.concat([shifted_serie_1, serie_2], ignore_index=False))
+            calc_corr_results.append(calc_corr_result)
+            
+            # Generate and save a scatter plot for the interp pair
+            output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
+            fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+            save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+        
+        # Concatenate the results at the end instead of within the loop
+        calc_corr_results_df = pd.concat(calc_corr_results, ignore_index=False)
+        
+        # Find the best correlation result
+        max_abs_corr = calc_corr_results_df['corr'].abs().max()
+        max_corr_rows = calc_corr_results_df[calc_corr_results_df['corr'].abs() == max_abs_corr]
+        
+        if len(max_corr_rows) > 1:
+            best_corr_result = max_corr_rows.loc[max_corr_rows['shift_diff'].abs().idxmin()]
+        else:
+            best_corr_result = max_corr_rows.iloc[0]
+        
+                
+        # Save the best correlation result and the corresponding pair
+        best_corr_results.append(best_corr_result)
+        
+    # Final concatenation of the best results
+    best_corr_results_df = pd.concat(best_corr_results, ignore_index=False)
+    best_corr_results_df['group_label'] = group_label
+    
+    best_interp_pairs_df = pd.concat(best_interp_pairs_df, ignore_index=False)
+    
+    return best_corr_results_df
 
 
 
