@@ -23,6 +23,8 @@ from scipy.interpolate import interp1d
 from scipy.stats import pearsonr
 
 from IPython.display import display
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 #%%
 cooperation_1_time_intervals = {
@@ -198,8 +200,8 @@ def extract_data_from_file(file_path, df=None):
         if not all(map(str.isdigit, y_data)):
             raise ValueError("File contains non-numeric data.")
 
-        # Convert the list of string data to integer numpy array
-        y_data = np.array(y_data).astype(int)
+        # Convert the list of string data to float numpy array
+        y_data = np.array(y_data).astype(float)
 
         # Compute cumulative sum for x_data
         x_data = np.cumsum(y_data)
@@ -210,8 +212,12 @@ def extract_data_from_file(file_path, df=None):
         start_timestamp = get_info_from_path(file_path, 1) + get_info_from_path(file_path, 2)
         
         # Convert start timestamp to pandas datetime object
-        df_timestamp = pd.to_datetime(start_timestamp, format='%Y-%m-%d%H-%M-%S', errors='raise')
-
+        try:
+            df_timestamp = pd.to_datetime(start_timestamp, format='%Y-%m-%d%H-%M-%S', errors='raise')
+        except ValueError as e:
+            print(f"Error: Invalid timestamp format for {start_timestamp} in file {file_path}")
+            print(f"Details: {e}")
+            
         # Create a new index name for the row
         index_name = f"{get_info_from_path(file_path)}_{str(shift)}"
 
@@ -258,7 +264,8 @@ def scatter_plot(series_df: pd.DataFrame, title: str = None):
     """
 
     # Validate the input DataFrame
-    validate_series_df(series_df, min_size=None, max_size=None)
+    if not validate_series_df(series_df):
+        print("Validation failed in scatter_plot function.")
 
     # Determine the overall time range of the series
     stop = max(series_df['x'].apply(lambda arr: arr[-1] if len(arr) > 0 else float('-inf')))
@@ -321,7 +328,8 @@ def density_plot(series_df: pd.DataFrame, sd_threshold: float = 3, title: str = 
     
     
     # Validate the input DataFrame
-    validate_series_df(series_df, min_size=None, max_size=None)
+    if not validate_series_df(series_df):
+        print("Validation failed in density_plot function.")
     
     # Generate names from the DataFrame index
     names = series_df.index.tolist()
@@ -334,6 +342,11 @@ def density_plot(series_df: pd.DataFrame, sd_threshold: float = 3, title: str = 
         if not np.issubdtype(y_data.dtype, np.number):
             raise RuntimeError(f"Non-numeric data found in 'y' column for index {names[i]}.")
         
+        # Check if y_data is empty or contains only NaN
+        if y_data.size == 0 or np.all(np.isnan(y_data)):
+            print(f"No valid data for index {names[i]}, skipping this series.")
+            continue
+
         # Create the histogram trace
         trace = go.Histogram(
             x=y_data, 
@@ -344,8 +357,8 @@ def density_plot(series_df: pd.DataFrame, sd_threshold: float = 3, title: str = 
         fig.add_trace(trace)
         
         # Calculate and add vertical lines for outliers
-        outlier_low = round(np.mean(y_data) - sd_threshold * np.std(y_data))
-        outlier_high = round(np.mean(y_data) + sd_threshold * np.std(y_data))
+        outlier_low = round(np.nanmean(y_data) - sd_threshold * np.nanstd(y_data))
+        outlier_high = round(np.nanmean(y_data) + sd_threshold * np.nanstd(y_data))
         trace_color = "gray"
         
         fig.add_vline(
@@ -467,25 +480,21 @@ def save_plot(fig, file_name: str, folder_name: str = "out", format: str = "png"
 #%%
 def trim(series_df, start=None, end=None):
     """
-    Trims the data in the input DataFrame to the specified time range.
-
-    This function filters each row of the DataFrame to include only data within a specified time range.
-    If `start` and `end` are not provided, the function uses the minimum and maximum available time values
-    in the DataFrame. The function updates the `starttime`, `endtime`, and `duration` of each series accordingly.
-
+    Trims the time series data within the specified start and end times.
+    
     Parameters:
-    series_df (pd.DataFrame): The DataFrame containing the series to be trimmed. It should have columns 'x', 'y', 'starttime', and 'endtime'.
-    start (int, optional): The start time (in milliseconds) for trimming. If None, the minimum start time in the DataFrame is used.
-    end (int, optional): The end time (in milliseconds) for trimming. If None, the maximum end time in the DataFrame is used.
-
+    - series_df (pd.DataFrame): DataFrame containing time series data with columns 'x', 'y', 'starttime', and 'endtime'.
+    - start (int, optional): The start time in milliseconds for trimming the series. Defaults to the maximum start time in the series if not provided.
+    - end (int, optional): The end time in milliseconds for trimming the series. Defaults to the minimum end time in the series if not provided.
+    
     Returns:
-    pd.DataFrame: A new DataFrame with the trimmed series, including updated `starttime`, `endtime`, and `duration`.
-
-    Raises:
-    KeyError: If the required columns 'x', 'y', 'starttime', or 'endtime' are missing in the DataFrame.
+    - pd.DataFrame: A new DataFrame with the trimmed series.
     """
     
-    validate_series_df(series_df, min_size=None, max_size=None)
+    
+    # Validate the input DataFrame
+    if not validate_series_df(series_df):
+        print("Validation failed in trim function.")
     
     # Create a copy of the input DataFrame to avoid modifying the original
     series_df = series_df.copy()
@@ -495,27 +504,37 @@ def trim(series_df, start=None, end=None):
     min_stop = min(series_df['x'].apply(lambda arr: arr[-1]))
     
     # Set default values for new_start and new_end
-    new_start = max_start if start is None or start < max_start else start
-    new_end = min_stop if end is None or end > min_stop else end
+    new_start = max_start if start is None else start
+    new_end = min_stop if end is None else end
         
-    # Initialize the resulting DataFrame
-    trimmed_series_df = pd.DataFrame(columns=series_df.columns)
+    # Initialize lists to store trimmed series
+    trimmed_series = []
     
     # Iterate over each row in the DataFrame
     for i in range(series_df.shape[0]):
         x = series_df.iloc[i]['x']
         y = series_df.iloc[i]['y']
         
+        index = series_df.index[i]
+        
         # Select indices within the specified time range
         selected_indices_x = np.where((x >= new_start) & (x <= new_end))[0]
+        
         new_x = x[selected_indices_x]
         new_y = y[selected_indices_x]
-        
         starttime = series_df.iloc[i]['starttime']
-        new_starttime = starttime + pd.to_timedelta(new_x[0], unit='ms')
-        new_endtime = starttime + pd.to_timedelta(new_x[-1], unit='ms')
-        new_duration = (new_endtime - new_starttime).total_seconds() / 60
         
+        # Check if new_x is empty
+        if new_x.size == 0:
+            print(f"Trimmed new_x is empty for {index} and range {new_start} to {new_end}.")
+            new_starttime = starttime + pd.to_timedelta(new_start, unit='ms')
+            new_endtime = starttime + pd.to_timedelta(new_end, unit='ms')
+            new_duration = (new_endtime - new_starttime).total_seconds() / 60
+        else:   
+            new_starttime = starttime + pd.to_timedelta(new_x[0], unit='ms')
+            new_endtime = starttime + pd.to_timedelta(new_x[-1], unit='ms')
+            new_duration = (new_endtime - new_starttime).total_seconds() / 60
+            
         # Update the row using the update_series function
         updated_serie = update_series(
             serie=series_df.iloc[[i]], 
@@ -526,10 +545,12 @@ def trim(series_df, start=None, end=None):
             duration=new_duration
         )
         
-        # Append the updated row to the resulting DataFrame
-        trimmed_series_df = pd.concat([trimmed_series_df, updated_serie], ignore_index=False)
+        # Append the updated row
+        trimmed_series.append(updated_serie.iloc[0])
+        
+    trimmed_series = pd.DataFrame(trimmed_series)
     
-    return trimmed_series_df
+    return trimmed_series
 
 #%%
 def update_series(
@@ -562,16 +583,22 @@ def update_series(
     """
     
     # Validate that serie is a single-row DataFrame
-    validate_series_df(serie, min_size=1, max_size=1)
-        
+    if not validate_series_df(serie, min_size=1, max_size=1):
+        print("Validation failed in update_series function.")
+    
+    # Create a copy of the DataFrame to avoid modifying the original
+    serie = serie.copy()
+    
     if x is not None:
         if not isinstance(x, np.ndarray):
             value_type = type(x)
             raise TypeError("Input x must be a np.ndarray but is {value_type}.")
-        if x.size == 0:
-            raise ValueError("Input x is empty.")
-        if np.all(np.isnan(x)):
-            raise ValueError("Input x is NaN.")
+# =============================================================================
+#         if x.size == 0:
+#             raise ValueError("Input x is empty.")
+#         if np.all(np.isnan(x)):
+#             raise ValueError("Input x is NaN.")
+# =============================================================================
         new_x = x
     else:
         new_x = serie.iloc[0]['x']
@@ -580,10 +607,12 @@ def update_series(
         if not isinstance(y, np.ndarray):
             value_type = type(y)
             raise TypeError(f"Input y must be a np.ndarray but is {value_type}.")
-        if y.size == 0:
-            raise ValueError("Input y is empty.")
-        if np.all(np.isnan(y)):
-            raise ValueError("Input y is NaN.")
+# =============================================================================
+#         if y.size == 0:
+#             raise ValueError("Input y is empty.")
+#         if np.all(np.isnan(y)):
+#             raise ValueError("Input y is NaN.")
+# =============================================================================
         new_y = y
     else:
         new_y = serie.iloc[0]['y']
@@ -659,76 +688,114 @@ def update_series(
         'duration': [new_duration]
     }, index=[new_index])  
     
-    # Validate that serie is a single-row DataFrame
-    validate_series_df(updated_serie, min_size=1, max_size=1)
-    
+   
     return updated_serie
 
 #%%
-def validate_series_df(series_df: pd.DataFrame, min_size: int = None, max_size: int = None) -> bool:
+def validate_series_df(series_df: pd.DataFrame, min_size: int = None, max_size: int = None, threshold_samples: float = None) -> bool:
     """
     Validates if a given DataFrame meets the required criteria for measurement data.
-
-    This function checks if a DataFrame:
-    - Is of the correct type.
-    - Contains no more than a specified number of rows.
-    - Includes all required columns.
-    - Contains data of the expected types within those columns.
 
     Parameters:
     - series_df (pd.DataFrame): The DataFrame to be validated.
     - min_size (int, optional): The minimum number of allowed rows in the DataFrame. If `None`, no size limit is applied.
     - max_size (int, optional): The maximum number of allowed rows in the DataFrame. If `None`, no size limit is applied.
+    - threshold_samples (float, optional): The minimum ratio of the actual number of samples in 'x' 
+                                           compared to the estimated number of samples. If `None`, no checking sample ratio applied.
 
     Returns:
-    - bool: True if the DataFrame meets all the criteria, raises an error otherwise.
-
-    Raises:
-    - TypeError: If the input `df` is not a DataFrame.
-    - ValueError: If the DataFrame exceeds the maximum or minimum allowed number of rows.
-    - KeyError: If any of the required columns do not exist in the DataFrame.
-    - TypeError: If the data types within the columns do not match the expected types.
+    - bool: True if the DataFrame meets all the criteria, False otherwise.
     """
-
-    # Validate input type
-    if not isinstance(series_df, pd.DataFrame):
-        value_type = type(series_df)
-        raise TypeError(f"Input must be a pd.DataFrame but is {value_type}.")    
+    errors = []
     
-    # Ensure the DataFrame does not exceed the maximum allowed number of rows
-    if max_size is not None:
-        series_size = series_df.shape[0]
-        if series_size > max_size:
-            raise ValueError(f"The input DataFrame must contain no more than {max_size} rows but has {series_size} rows.")
-
-    # Ensure the DataFrame does not exceed the minimum allowed number of rows
-    if min_size is not None:
-        series_size = series_df.shape[0]
-        if series_size < min_size:
-            raise ValueError(f"The input DataFrame must contain no less than {min_size} rows but has {series_size} rows.")
+    pd.set_option('display.max_columns', None)
     
-    # Define required columns and their expected types
-    expected_columns = {
-        'x': np.ndarray,
-        'y': np.ndarray,
-        'shift': (int, float),
-        'meas_name': str,
-        'starttime': pd.Timestamp,
-        'endtime': pd.Timestamp,
-        'duration': (int, float)
-    }
-    
-    # Check for the presence of required columns and validate their data types
-    for col, expected_type in expected_columns.items():
-        if col not in series_df.columns:
-            raise KeyError(f"'{col}' does not exist in the DataFrame.")
+    try:
+        # Validate input type
+        if not isinstance(series_df, pd.DataFrame):
+            errors.append(f"Input must be a pd.DataFrame but is {type(series_df)}.")
         
-        # Validate the type of data in the column
-        for i, value in enumerate(series_df[col]):
-            if not isinstance(value, expected_type):
-                value_type = type(value)
-                raise TypeError(f"The value in column '{col}' at row {i} must be of type {expected_type} but is {value_type}.")
+        # Validate DataFrame size
+        series_size = series_df.shape[0]
+        if max_size is not None and series_size > max_size:
+            errors.append(f"The input DataFrame must contain no more than {max_size} rows but has {series_size} rows.")
+        if min_size is not None and series_size < min_size:
+            errors.append(f"The input DataFrame must contain no less than {min_size} rows but has {series_size} rows.")
+        
+        # Define required columns and their expected types
+        expected_columns = {
+            'x': np.ndarray,
+            'y': np.ndarray,
+            'shift': (int, float),
+            'meas_name': str,
+            'starttime': pd.Timestamp,
+            'endtime': pd.Timestamp,
+            'duration': (int, float)
+        }
+        
+        # Check for the presence of required columns and validate their data types
+        for col, expected_type in expected_columns.items():
+            if col not in series_df.columns:
+                errors.append(f"'{col}' does not exist in the DataFrame.")
+                continue  # Skip the type check if the column is missing
             
+            # Validate the type of data in the column
+            for i, value in enumerate(series_df[col]):
+                if not isinstance(value, expected_type):
+                    errors.append(f"The value in column '{col}' at row {i} must be of type {expected_type} but is {type(value)}.")
+                
+                # Additional checks for columns 'x' and 'y' to ensure np.ndarray size > 3
+                if col in ['x', 'y']:
+                    if isinstance(value, np.ndarray):
+                        # Check for valid elements (non-NaN and non-empty)
+                        valid_elements = value[~np.isnan(value) & (value != '')]
+                        if valid_elements.size <= 3:
+                            errors.append(f"The array in column '{col}' at row {i} must have more than 3 valid elements but has {valid_elements.size}.")
+                            
+    except Exception as e:
+        errors.append(f"Unexpected error: {e}")
+    
+    # If there are any errors so far, print them and return False
+    if errors:
+        print(f"Validation errors found for indices: {series_df.index.tolist()}")
+        display(series_df)
+        for error in errors:
+            print(f"- {error}")
+        return False
+
+    # Additional validation for 'x' length compared to estimated samples
+    for i, row in series_df.iterrows():
+        x_array = row['x']
+        y_array = row['y']
+        starttime = row['starttime']
+        endtime = row['endtime']
+    
+        if threshold_samples is not None:
+            if isinstance(x_array, np.ndarray) and isinstance(y_array, np.ndarray):
+                # Calculate estimated_samples based on the duration and average y value
+                duration_ms = (endtime - starttime).total_seconds() * 1000
+                avg_y_interval = np.mean(y_array)
+                if not np.isnan(avg_y_interval) and avg_y_interval > 0:
+                    estimated_samples = duration_ms / avg_y_interval
+                    
+                    # Check if the length of 'x' is at least the threshold ratio of estimated_samples
+                    if x_array.size < threshold_samples * estimated_samples:
+                        errors.append(f"The length of 'x' array at row {i} is {x_array.size}, which is less than {threshold_samples * 100:.0f}% of estimated_samples ({estimated_samples:.2f}).")
+                else:
+                    errors.append(f"Invalid average y interval at row {i}.")
+            else:
+                errors.append(f"Invalid data types in row {i} for 'x' or 'y'.")
+    
+    # If there are any additional errors, print them and return False
+    if errors:
+        print(f"Validation errors found for indices: {series_df.index.tolist()}")
+        display(series_df)
+        for error in errors:
+            print(f"- {error}")
+        return False
+    
+    pd.reset_option('display.max_columns')
+    
     return True
 #%%
 def shift_series(series_df: pd.DataFrame, shift_time_ms: float = 0) -> pd.DataFrame:
@@ -751,16 +818,13 @@ def shift_series(series_df: pd.DataFrame, shift_time_ms: float = 0) -> pd.DataFr
                   amount and other associated fields updated.
     """
 
-    # Ensure that updated_row is a DataFrame (handling case where it might be a Series)
-    if isinstance(series_df, pd.Series):
-        series_df = pd.DataFrame([series_df])  # Convert to DataFrame if necessary
-        
-    # Validate that series_df is a DataFrame
-    validate_series_df(series_df, min_size=None, max_size=None)
-    
+    # Validate the input DataFrame
+    if not validate_series_df(series_df):
+        print("Validation failed in shift_series function.")
+            
     # Create a copy of the DataFrame to avoid modifying the original
     series_df = series_df.copy()
-    series_df.reset_index(drop=True, inplace=True)
+    #series_df.reset_index(drop=True, inplace=True)
 
     # Initialize an empty DataFrame with the same columns as the original
     shifted_df = pd.DataFrame(columns=series_df.columns)
@@ -768,13 +832,13 @@ def shift_series(series_df: pd.DataFrame, shift_time_ms: float = 0) -> pd.DataFr
     # Iterate over each row in the DataFrame
     for i in range(series_df.shape[0]):
         # Shift the 'x' values by the specified time in milliseconds
-        new_x = series_df.at[i, 'x'] + shift_time_ms
+        new_x = series_df.iloc[i]['x'] + shift_time_ms
 
         # Calculate the new shift value in seconds
         new_shift = int(pd.to_timedelta(shift_time_ms, unit='ms').total_seconds())
 
         # Create a new index based on the measurement name and new shift
-        new_index = f"{series_df.at[i, 'meas_name']}_{new_shift}"
+        new_index = f"{series_df.iloc[i]['meas_name']}_{new_shift}"
 
         # Update the current row with the shifted data
         updated_row = update_series(
@@ -847,7 +911,7 @@ def interp_pair_uniform_time(pair_df: pd.DataFrame, ix_step: float, method: str 
     Parameters:
     pair_df (pd.DataFrame): DataFrame containing exactly two rows, each representing a signal with 'x' and 'y' values.
     ix_step (float): Step size for the uniform time axis (in the same units as the 'x' values).
-    method (str): Interpolation method, e.g., 'linear', 'nearest', 'cubic'.
+    method (str): Interpolation method, e.g., 'linear', 'nearest', 'cubic', 'quadratic'.
     
     Returns:
     pd.DataFrame: DataFrame containing the two signals interpolated to a common time axis.
@@ -857,7 +921,8 @@ def interp_pair_uniform_time(pair_df: pd.DataFrame, ix_step: float, method: str 
     """
     
     # Ensure the DataFrame contains exactly two rows
-    validate_series_df(pair_df, min_size=2, max_size=2)
+    if not validate_series_df(pair_df, min_size=2, max_size=2):
+        print("Validation failed in interp_pair_uniform_time function.")
     
     # Extract x and y data for both signals
     x1, y1 = pair_df.iloc[0]['x'], pair_df.iloc[0]['y']
@@ -909,8 +974,9 @@ def merge_meas(series_df: pd.DataFrame) -> pd.DataFrame:
       time series data and start/end times.
     """
 
-    # Validate that serie is a DataFrame
-    validate_series_df(series_df, min_size=None, max_size=None)
+    # Validate the input DataFrame
+    if not validate_series_df(series_df):
+        print("Validation failed in merge_meas function.")
     
     # Sort the DataFrame by start time to ensure proper ordering for merging
     series_df = series_df.sort_values(by='starttime')
@@ -992,8 +1058,9 @@ def find_pairs(series_df: pd.DataFrame, serie_1_letter_suffix: str = 'm', serie_
         - list of str: Measurement names that do not have a matching pair.
     """
     
-    # Validate that serie is a DataFrame
-    validate_series_df(series_df, min_size=None, max_size=None)
+    # Validate the input DataFrame
+    if not validate_series_df(series_df):
+        print("Validation failed in find_pairs function.")
     
     matching_pairs = set()  # Use a set to store unique pairs
     
@@ -1041,19 +1108,20 @@ def calculate_pair_time_difference(pair_df: pd.DataFrame, time: str) -> pd.DataF
     """
     
     # Ensure the DataFrame contains exactly two rows
-    validate_series_df(pair_df, min_size=2, max_size=2)
+    if not validate_series_df(pair_df, min_size=2, max_size=2):
+        print("Validation failed in calculate_pair_time_difference function.")
     
     # Extract the two series from the DataFrame
-    serie_1 = pair_df.iloc[0]
-    serie_2 = pair_df.iloc[1]
+    serie_1 = pair_df.iloc[[0]]
+    serie_2 = pair_df.iloc[[1]]
     
     # Check and calculate time difference based on the specified time ('starttime' or 'endtime')
     if time == 'starttime':
-        time1 = pd.to_datetime(serie_1['starttime'])
-        time2 = pd.to_datetime(serie_2['starttime'])
+        time1 = pd.to_datetime(serie_1.iloc[0]['starttime'])
+        time2 = pd.to_datetime(serie_2.iloc[0]['starttime'])
     elif time == 'endtime':
-        time1 = pd.to_datetime(serie_1['endtime'])
-        time2 = pd.to_datetime(serie_2['endtime'])
+        time1 = pd.to_datetime(serie_1.iloc[0]['endtime'])
+        time2 = pd.to_datetime(serie_2.iloc[0]['endtime'])
     else:
         raise ValueError("The 'time' parameter must be either 'starttime' or 'endtime'.")
     
@@ -1065,8 +1133,8 @@ def calculate_pair_time_difference(pair_df: pd.DataFrame, time: str) -> pd.DataF
     
     # Create a DataFrame to store the results
     pair_time_diff = pd.DataFrame({
-        'meas_name_1': [serie_1['meas_name']],
-        'meas_name_2': [serie_2['meas_name']],
+        'meas_name_1': [serie_1.iloc[0]['meas_name']],
+        'meas_name_2': [serie_2.iloc[0]['meas_name']],
         'diff_time_ms': [diff_time_ms]
     })
     
@@ -1089,7 +1157,8 @@ def time_align_pair(pair_df: pd.DataFrame, time_ms_threshold: float) -> pd.DataF
     """
     
     # Ensure the DataFrame contains exactly two rows
-    validate_series_df(pair_df, min_size=2, max_size=2)
+    if not validate_series_df(pair_df, min_size=2, max_size=2):
+        print("Validation failed in time_align_pair function.")
     
     # Calculate the time difference between the start times of the two signals
     diff_start_time_ms = calculate_pair_time_difference(pair_df, time='starttime')
@@ -1263,10 +1332,14 @@ def filter_series(series_df: pd.DataFrame) -> pd.DataFrame:
     - The function `update_series` is used to create a DataFrame with updated series data.
     """
     # Validate that serie is a DataFrame
-    validate_series_df(series_df, min_size=None, max_size=None)
+    if not validate_series_df(series_df, min_size=None, max_size=None):
+        print("Validation failed in filter_series function.")
     
-    # Initialize an empty DataFrame with the same columns as the input DataFrame
-    filtered_series_df = pd.DataFrame(columns=series_df.columns)
+    # Create a copy of the DataFrame to avoid modifying the original
+    series_df = series_df.copy()
+    
+    # Initialize lists to store filtered series
+    filtered_series = []
     
     for i in range(len(series_df)):
         # Extract the RR intervals for the current row
@@ -1281,29 +1354,25 @@ def filter_series(series_df: pd.DataFrame) -> pd.DataFrame:
         
         # Interpolate NaN values in the filtered RR intervals
         nn = interpolate_nan_values(filtered_rr)
-        
-        # Calculate new x values and time attributes
-        new_x = np.cumsum(nn)
-        new_starttime = series_df.iloc[i]['starttime']
-        new_endtime = new_starttime + pd.to_timedelta(new_x[-1], unit='ms')
-        new_duration = (new_endtime - new_starttime).total_seconds() / 60
-        
+                
         # Update the row with new data and append to the result DataFrame
-        updated_row = update_series(
-            serie=pd.DataFrame([series_df.iloc[i]]),
-            x=new_x,
+        updated_serie = update_series(
+            serie=series_df.iloc[[i]],
+            x=None,
             y=nn,
-            shift=None,  # Assuming no change in shift
+            shift=None,
             meas_name=None,  # Assuming no change in measurement name
             starttime=None,  # Assuming no change in start time
-            endtime=new_endtime,
-            duration=new_duration,
+            endtime=None,
+            duration=None,
             index=None  # Assuming no change in index
         )
         
-        filtered_series_df = pd.concat([filtered_series_df, updated_row], ignore_index=False)
+        filtered_series.append(updated_serie.iloc[0])
+        
+    filtered_series = pd.DataFrame(filtered_series)
     
-    return filtered_series_df
+    return filtered_series
 
 #%%
 def calc_corr(pair_df: pd.DataFrame):
@@ -1330,17 +1399,18 @@ def calc_corr(pair_df: pd.DataFrame):
         interpolation on a uniform time grid.
     """
     # Validate that serie is a 2 row DataFrame
-    validate_series_df(pair_df, min_size=2, max_size=2)
+    if not validate_series_df(pair_df, min_size=2, max_size=2, threshold_samples=0.7):
+        print("Validation failed in calc_corr function.")
     
     # Trim the pair of series to the common time range
-    trimmed_pair_df = trim(pair_df)
+    #trimmed_pair_df = trim(pair_df)
     
     # Interpolate both series to a uniform time grid
-    interp_pair_df = interp_pair_uniform_time(trimmed_pair_df, ix_step=250, method='linear')
+    interp_pair_df = interp_pair_uniform_time(pair_df, ix_step=250, method='quadratic')
     
     # Extract the interpolated series
-    serie_1 = pd.DataFrame([interp_pair_df.iloc[0]])
-    serie_2 = pd.DataFrame([interp_pair_df.iloc[1]])
+    serie_1 = interp_pair_df.iloc[[0]]
+    serie_2 = interp_pair_df.iloc[[1]]
     
     # Calculate the Pearson correlation coefficient and p-value
     corr, p_val = pearsonr(serie_1['y'].iloc[0], serie_2['y'].iloc[0])
@@ -1357,128 +1427,267 @@ def calc_corr(pair_df: pd.DataFrame):
     return corr_result, interp_pair_df
 
 #%%
+# =============================================================================
+# def process_rr_data(series_df: pd.DataFrame, group_label: str, start_time_ms: int, end_time_ms: int) -> pd.DataFrame:
+#     """
+#     Processes RR interval data by finding matching pairs, aligning them in time,
+#     trimming to specific time frames, and calculating correlations. Generates and 
+#     saves various plots during the process.
+# 
+#     Parameters:
+#     - series_df (pd.DataFrame): The input DataFrame containing series data.
+#     - group_label (str): The label used for grouping in the output files.
+#     - start_time_ms (int): The start time for trimming the series (in milliseconds).
+#     - end_time_ms (int): The end time for trimming the series (in milliseconds).
+# 
+#     Returns:
+#     - pd.DataFrame: DataFrame containing the best correlation results.
+#     """
+# 
+#     # Validate that series_df is a DataFrame and has at least 2 rows for pairing
+#     if not validate_series_df(series_df, min_size=2):
+#         raise ValueError("Input DataFrame failed validation.")
+#     
+#     # Find matching pairs and unmatched series
+#     matching_pairs, unmatched_series = find_pairs(series_df)
+#     
+#     best_corr_results = []
+#     
+#     # Process each matching pair
+#     for pair in matching_pairs:
+#         # Extract the corresponding rows from series_df for the given pair
+#         pair_df = series_df.loc[series_df['meas_name'].isin(pair)].iloc[[0, 1]]
+#         
+#         # Align the pair in time
+#         pair_df = time_align_pair(pair_df, time_ms_threshold=1000)
+#         
+#         # Trim the pair to the specified time frame
+#         trimmed_pair_df = trim(pair_df, start_time_ms, end_time_ms)
+#         
+#         if not validate_series_df(series_df = trimmed_pair_df, threshold_samples = 0.7):
+#             print(f"Validation failed in proces_rr_data for pair: {pair}. Skipping this pair.")
+#             continue
+#         
+#         # Generate and save a histogram plot for the trimmed pair
+#         output_plot_folder = os.path.join(output_folder, "hist_pairs_trimmed", group_label)
+#         fig_hist, title_hist = density_plot(trimmed_pair_df, title=f"{pair}_Distribution of RR-intervals")
+#         save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
+#         
+#         # Generate and save a scatter plot for the trimmed pair
+#         output_plot_folder = os.path.join(output_folder, "scatter_pairs_trimmed", group_label)
+#         fig_scatter, title_scatter = scatter_plot(trimmed_pair_df)
+#         save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+#         
+#         # Filter the trimmed pair to remove outliers or unwanted data
+#         filtered_pair_df = filter_series(trimmed_pair_df)
+#         
+#         # Generate and save a histogram plot for the filtered pair
+#         output_plot_folder = os.path.join(output_folder, "hist_pairs_filtered", group_label)
+#         fig_hist, title_hist = density_plot(filtered_pair_df, title=f"{pair}_Distribution of RR-intervals")
+#         save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
+#         
+#         # Generate and save a scatter plot for the filtered pair
+#         output_plot_folder = os.path.join(output_folder, "scatter_pairs_filtered", group_label)
+#         fig_scatter, title_scatter = scatter_plot(filtered_pair_df)
+#         save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+#         
+#         # Initialize lists to store correlation results
+#         calc_corr_results = []
+#     
+#         # Calculate correlation for the initial pair without time shift
+#         calc_corr_result, interp_pair_df = calc_corr(filtered_pair_df)
+#         calc_corr_results.append(calc_corr_result)
+#         
+#         # Generate and save a scatter plot for the interp pair
+#         output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
+#         fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+#         save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+#     
+#         # Obtain the two series from the trimmed pair
+#         serie_1 = trimmed_pair_df.iloc[[0]]
+#         serie_2 = trimmed_pair_df.iloc[[1]]
+#         
+#         # Iterate over various time shift values
+#         for shift_ms in range(1000, 5001, 1000):
+#             # Shift and calculate correlations for serie 1 and shifted series 2
+#             shifted_serie_2 = shift_series(serie_2, shift_ms)    
+#             calc_corr_result, interp_pair_df = calc_corr(pd.concat([serie_1, shifted_serie_2], ignore_index=False))
+#             calc_corr_results.append(calc_corr_result)
+#             
+#             # Generate and save a scatter plot for the interp pair
+#             output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
+#             fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+#             save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+#     
+#             # Shift and calculate correlations for serie 2 and shifted series 1
+#             shifted_serie_1 = shift_series(serie_1, shift_ms)
+#             calc_corr_result, interp_pair_df = calc_corr(pd.concat([shifted_serie_1, serie_2], ignore_index=False))
+#             calc_corr_results.append(calc_corr_result)
+#             
+#             # Generate and save a scatter plot for the interp pair
+#             output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
+#             fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+#             save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+#         
+#         # Concatenate the results for the current pair
+#         calc_corr_results_df = pd.concat(calc_corr_results, ignore_index=False)
+#         
+#         # Find the best correlation result
+#         max_abs_corr = calc_corr_results_df['corr'].abs().max()
+#         max_corr_rows = calc_corr_results_df[calc_corr_results_df['corr'].abs() == max_abs_corr]
+#         
+#         if len(max_corr_rows) > 1:
+#             best_corr_result = max_corr_rows.loc[max_corr_rows['shift_diff'].abs().idxmin()]
+#         else:
+#             best_corr_result = max_corr_rows.iloc[0]
+#         
+#         # Save the best correlation result
+#         best_corr_results.append(best_corr_result)
+#         
+#     # Final concatenation of the best results
+#     best_corr_results = pd.DataFrame(best_corr_results)
+#     best_corr_results['group_label'] = group_label
+#     
+#     
+#     return best_corr_results
+# =============================================================================
+
+
+#%%
 def process_rr_data(series_df: pd.DataFrame, group_label: str, start_time_ms: int, end_time_ms: int) -> pd.DataFrame:
     """
     Processes RR interval data by finding matching pairs, aligning them in time,
-    trimming to specific time frames, and calculating correlations. Generates and 
-    saves various plots during the process.
+    trimming to specific time frames, filtering, and calculating correlations.
+    Generates and saves various plots during the process.
 
     Parameters:
-    - series_df (pd.DataFrame): The input DataFrame containing series data.
+    - series_df (pd.DataFrame): The input DataFrame containing series data. It should have at least two rows for pairing.
     - group_label (str): The label used for grouping in the output files.
-    - start_time_ms (int): The start time for trimming the series (in milliseconds).
-    - end_time_ms (int): The end time for trimming the series (in milliseconds).
+    - start_time_ms (int): The start time for trimming the series, in milliseconds.
+    - end_time_ms (int): The end time for trimming the series, in milliseconds.
 
     Returns:
     - pd.DataFrame: DataFrame containing the best correlation results.
     """
 
-    # Validate that series_df is a DataFrame
-    validate_series_df(series_df, min_size=None, max_size=None)
-    
+    # Validate that series_df is a DataFrame and has at least 2 rows for pairing
+    if not validate_series_df(series_df, min_size=2):
+        raise ValueError("Input DataFrame failed validation. It must have at least 2 rows.")
+
     # Find matching pairs and unmatched series
     matching_pairs, unmatched_series = find_pairs(series_df)
-    
+
     best_corr_results = []
-    best_interp_pairs_df = []
-    
+
     # Process each matching pair
     for pair in matching_pairs:
         # Extract the corresponding rows from series_df for the given pair
         pair_df = series_df.loc[series_df['meas_name'].isin(pair)].iloc[[0, 1]]
-        
+
         # Align the pair in time
         pair_df = time_align_pair(pair_df, time_ms_threshold=1000)
-        
+
         # Trim the pair to the specified time frame
         trimmed_pair_df = trim(pair_df, start_time_ms, end_time_ms)
+
+        # Validate trimmed pair DataFrame
+        if not validate_series_df(trimmed_pair_df, threshold_samples=0.7):
+            print(f"Validation failed for pair {pair} in time frame {start_time_ms} to {end_time_ms}. Skipping this pair.")
+            continue
+
+        # Generate and save plots for the TRIMMED pair
+        output_plot_folder = os.path.join(output_folder, group_label, 'trimmed')
         
-        # Generate and save a histogram plot for the trimmed pair
-        output_plot_folder = os.path.join(output_folder, "hist_pairs_trimmed", group_label)
+        # Histogram plot for the TRIMMED pair
         fig_hist, title_hist = density_plot(trimmed_pair_df, title=f"{pair}_Distribution of RR-intervals")
-        save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
-        
-        # Generate and save a scatter plot for the trimmed pair
-        output_plot_folder = os.path.join(output_folder, "scatter_pairs_trimmed", group_label)
+        save_plot(fig_hist, title_hist, folder_name=os.path.join(output_plot_folder, "hist_pairs_trimmed"), format="html")
+
+        # Scatter plot for the TRIMMED pair
         fig_scatter, title_scatter = scatter_plot(trimmed_pair_df)
-        save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
-        
+        save_plot(fig_scatter, title_scatter, folder_name=os.path.join(output_plot_folder, "scatter_pairs_trimmed"), format="html")
+
         # Filter the trimmed pair to remove outliers or unwanted data
         filtered_pair_df = filter_series(trimmed_pair_df)
+
+        # Generate and save plots for the FILTERED pair
+        output_plot_folder = os.path.join(output_folder, group_label, 'filtered')
         
-        # Generate and save a histogram plot for the filtered pair
-        output_plot_folder = os.path.join(output_folder, "hist_pairs_filtered", group_label)
+        # Histogram plot for the FILTERED pair
         fig_hist, title_hist = density_plot(filtered_pair_df, title=f"{pair}_Distribution of RR-intervals")
-        save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
-        
-        # Generate and save a scatter plot for the filtered pair
-        output_plot_folder = os.path.join(output_folder, "scatter_pairs_filtered", group_label)
+        save_plot(fig_hist, title_hist, folder_name=os.path.join(output_plot_folder, "hist_pairs_filtered"), format="html")
+
+        # Scatter plot for the FILTERED pair
         fig_scatter, title_scatter = scatter_plot(filtered_pair_df)
-        save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
-        
+        save_plot(fig_scatter, title_scatter, folder_name=os.path.join(output_plot_folder, "scatter_pairs_filtered"), format="html")
+
         # Initialize lists to store correlation results
         calc_corr_results = []
-    
-        # Calculate correlation for the initial pair without time shift
+
+        # Calculate correlation for the initial pair
         calc_corr_result, interp_pair_df = calc_corr(filtered_pair_df)
         calc_corr_results.append(calc_corr_result)
-        
-        # Generate and save a scatter plot for the interp pair
-        output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
+
+        # Generate and save scatter plot for the interpolated pair
+        output_plot_folder = os.path.join(output_folder, group_label, "interp", str(pair))
         fig_scatter, title_scatter = scatter_plot(interp_pair_df)
         save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
-    
-        # Obtain the two series from the trimmed pair
-        serie_1 = pd.DataFrame([trimmed_pair_df.iloc[0]])
-        serie_2 = pd.DataFrame([trimmed_pair_df.iloc[1]])
+
+        # Obtain the two series from the filtered pair
+        serie_1 = filtered_pair_df.iloc[[0]]
+        serie_2 = filtered_pair_df.iloc[[1]]
         
         # Iterate over various time shift values
         for shift_ms in range(1000, 5001, 1000):
-            shifted_serie_2 = shift_series(serie_2, shift_ms)    
-            calc_corr_result, interp_pair_df = calc_corr(pd.concat([serie_1, shifted_serie_2], ignore_index=False))
-            calc_corr_results.append(calc_corr_result)
-            
-            # Generate and save a scatter plot for the interp pair
-            output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
-            fig_scatter, title_scatter = scatter_plot(interp_pair_df)
-            save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
-    
-            # Repeat for shifting the other series
-            shifted_serie_1 = shift_series(serie_1, shift_ms)
-            calc_corr_result, interp_pair_df = calc_corr(pd.concat([shifted_serie_1, serie_2], ignore_index=False))
-            calc_corr_results.append(calc_corr_result)
-            
-            # Generate and save a scatter plot for the interp pair
-            output_plot_folder = os.path.join(output_folder, "scatter_pairs_interp", group_label, str(pair))
-            fig_scatter, title_scatter = scatter_plot(interp_pair_df)
-            save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
-        
-        # Concatenate the results at the end instead of within the loop
+            # Shift and trim
+            shifted_serie = shift_series(pair_df, shift_ms)
+            shifted_serie = trim(shifted_serie, start_time_ms, end_time_ms)
+            shifted_serie_1 = shifted_serie.iloc[[0]]
+            shifted_serie_2 = shifted_serie.iloc[[1]]
+
+            # Process shifted series 1
+            if validate_series_df(shifted_serie_1, threshold_samples=0.7):
+                shifted_serie_1 = filter_series(shifted_serie_1)
+                calc_corr_result, interp_pair_df = calc_corr(pd.concat([shifted_serie_1, serie_2], ignore_index=False))
+                calc_corr_results.append(calc_corr_result)
+                
+                # Generate and save scatter plot for the INTERP pair
+                fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+                save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+            else:
+                print(f"Validation failed for shifted series 1 for pair {pair} in time frame {start_time_ms} to {end_time_ms}. Skipping this pair.")
+
+            # Process shifted series 2
+            if validate_series_df(shifted_serie_2, threshold_samples=0.7):
+                shifted_serie_2 = filter_series(shifted_serie_2)
+                calc_corr_result, interp_pair_df = calc_corr(pd.concat([serie_1, shifted_serie_2], ignore_index=False))
+                calc_corr_results.append(calc_corr_result)
+                
+                # Generate and save scatter plot for the INTERP pair
+                fig_scatter, title_scatter = scatter_plot(interp_pair_df)
+                save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+            else:
+                print(f"Validation failed for shifted series 2 for pair {pair} in time frame {start_time_ms} to {end_time_ms}. Skipping this pair.")
+
+        # Concatenate the results for the current pair
         calc_corr_results_df = pd.concat(calc_corr_results, ignore_index=False)
-        
+
         # Find the best correlation result
         max_abs_corr = calc_corr_results_df['corr'].abs().max()
         max_corr_rows = calc_corr_results_df[calc_corr_results_df['corr'].abs() == max_abs_corr]
-        
+
         if len(max_corr_rows) > 1:
             best_corr_result = max_corr_rows.loc[max_corr_rows['shift_diff'].abs().idxmin()]
         else:
             best_corr_result = max_corr_rows.iloc[0]
-        
-                
-        # Save the best correlation result and the corresponding pair
+
+        # Save the best correlation result
         best_corr_results.append(best_corr_result)
-        
+
     # Final concatenation of the best results
-    best_corr_results_df = pd.concat(best_corr_results, ignore_index=False)
-    best_corr_results_df['group_label'] = group_label
-    
-    best_interp_pairs_df = pd.concat(best_interp_pairs_df, ignore_index=False)
-    
-    return best_corr_results_df
+    best_corr_results = pd.DataFrame(best_corr_results)
+    best_corr_results['group_label'] = group_label
 
-
-
+    return best_corr_results
 
 
 
