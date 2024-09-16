@@ -1,1 +1,0 @@
-NAZWA: nr (nr pomiaru); r lub w (relaksacja lub współpraca); k lub m (płeć); nr (nr pary); _nr (numer rejestracji do danego zadania)
