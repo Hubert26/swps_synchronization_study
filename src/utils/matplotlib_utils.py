@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import numpy as np
 
-from file_utils import create_directory, check_folder_exists
+from src.utils.file_utils import create_directory
+
 #%%
 def create_bar_plot(data, column, ax, title='', xlabel='', ylabel='Count', color='blue'):
     """
@@ -214,7 +215,7 @@ def save_fig_matplotlib(fig, file_path: str) -> None:
     
     # Ensure the directory exists
     dir_path = Path(file_path).parent
-    if(check_folder_exists(dir_path)):
+    if dir_path.is_dir():
         create_directory(dir_path)
     
     # Check if the figure is a Matplotlib or Seaborn figure
@@ -225,7 +226,40 @@ def save_fig_matplotlib(fig, file_path: str) -> None:
         raise TypeError("The 'fig' parameter must be a Matplotlib 'plt.Figure'.")
         
 #%%
-
+# =============================================================================
+# def corr_heatmap(df, title=None, color='viridis'):
+#     # Tworzenie własnej mapy kolorów z 20 odcieniami od -1 do 1
+#     colors = sns.color_palette(color, 20)
+#     cmap = LinearSegmentedColormap.from_list('custom_colormap', colors, N=20)
+#     
+#     with sns.axes_style("white"):
+#         f, ax = plt.subplots(figsize=(10, 10))
+#         sns.heatmap(df,
+# # =============================================================================
+# # to annotate on heatmap you need previous version of matplotlib              
+# # pip install matplotlib==3.7.3
+# # =============================================================================
+#                     annot=df.round(2),
+#                     vmax=1,
+#                     vmin=-1,
+#                     center=0,
+#                     square=True,
+#                     xticklabels=df.columns,
+#                     yticklabels=df.index,
+#                     cmap=cmap,
+#                     linewidths=.5,
+#                     cbar_kws={"shrink": 0.7, 'ticks': np.linspace(-1, 1, 21)})
+#         # Ustawienie rotacji etykiet
+#         ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
+#         ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+#     
+#     if not title:
+#         title = 'heatmap'
+#     
+#     plt.title(title)
+# 
+#     return f, title
+# =============================================================================
 
 
 #%%

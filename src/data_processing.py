@@ -4,21 +4,16 @@ Created on Fri May  3 13:05:29 2024
 
 @author: Hubert Szewczyk
 """
-
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.io as pio
 import plotly.graph_objects as go
-import seaborn as sns
-import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
-import mpld3
 import re
 pio.renderers.default='browser'
 import math
-import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from scipy.interpolate import interp1d
 from scipy.stats import pearsonr
 
@@ -26,395 +21,205 @@ from IPython.display import display
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-from pathlib import Path
-from plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly
-from file_utils import create_directory, check_file_exists
-from matplotlib_utils import save_fig_matplotlib
+from src.config import logger
+from src.classes import *
+from src.utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
+from src.utils.file_utils import read_text_file, extract_file_name
+from src.utils.matplotlib_utils import save_fig_matplotlib, create_subplots_matplotlib, create_multi_series_bar_chart_matplotlib
+from src.utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
 
+
+
+    
 #%%
-cooperation_1_time_intervals = {
-    (0, 8000): "1_z1_instr",#nie
-    (8000, 28000): "1_z1_1_k",
-    (28000, 48000): "1_z1_2_m",
-    (48000, 68000): "1_z1_3_k",
-    (68000, 88000): "1_z1_4_m",
-    (88000, 108000): "1_z1_5_k",
-    (108000, 128000): "1_z1_6_m",
-    (128000, 136000): "1_z1_odp_idle",#nie
-    (226000, 226000): "1_z1_odp",#nie
-    (246000, 286000): "1_pause",#nie
-    (286000, 294000): "1_z2_instr",#nie
-    (294000, 314000): "1_z2_1_m",
-    (314000, 334000): "1_z2_2_k",
-    (334000, 354000): "1_z2_3_m",
-    (354000, 374000): "1_z2_4_k",
-    (374000, 394000): "1_z2_5_m",
-    (394000, 414000): "1_z2_6_k",
-    (414000, 422000): "1_z2_odp_idle",#nie
-    (422000, 512000): "1_z2_odp",#nie
-    (512000, 547000): "1_baseline2_idle",#nie
-    (547000, 787000): "1_baseline2",
-}
-
-cooperation_2_time_intervals = {
-    (0, 8000): "2_z1_instr",
-    (8000, 28000): "2_z1_1_k",
-    (28000, 48000): "2_z1_2_m",
-    (48000, 68000): "2_z1_3_k",
-    (68000, 88000): "2_z1_4_m",
-    (88000, 108000): "2_z1_5_k",
-    (108000, 128000): "2_z1_6_m",
-    (128000, 136000): "2_z1_odp_idle",
-    (226000, 226000): "2_z1_odp",
-    (246000, 286000): "2_pause",
-    (286000, 294000): "2_z2_instr",
-    (294000, 314000): "2_z2_1_m",
-    (314000, 334000): "2_z2_2_k",
-    (334000, 354000): "2_z2_3_m",
-    (354000, 374000): "2_z2_4_k",
-    (374000, 394000): "2_z2_5_m",
-    (394000, 414000): "2_z2_6_k",
-    (414000, 422000): "2_z2_odp_idle",
-    (422000, 512000): "2_z2_odp",
-    (512000, 547000): "2_baseline2_idle",
-    (547000, 787000): "2_baseline2",
-}
-
-baseline_1_time_intervals = {
-    (0, 20000): "1_baseline1_idle",#nie
-    (20000, 260000): "1_baseline1",
-}
-
-baseline_2_time_intervals = {
-    (0, 20000): "2_baseline1_idle",
-    (20000, 260000): "2_baseline1",
-}
-
-# Define meas_types with measurement type and regex pattern
-meas_types = [
-    ('Baseline', '1w', r'.\d+_1'),
-    ('Cooperation', '1w', r'.\d+_(?!1)'),
-    ('Baseline', '2w', r'.\d+_1'),
-    ('Cooperation', '2w', r'.\d+_(?!1)')
-]
-
-
-
-current_working_directory = Path.cwd()    
-current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_folder = current_working_directory / current_time 
-create_directory(output_folder)
-
-
-#%%
-def get_info_from_path(file_path, part=0):
+def extract_data_from_file(file_path):
     """
-    Extracts a specific part of the file name from a given file path.
-
-    This function retrieves a segment of the file name based on the specified index 
-    from the file name (excluding the extension). The file name is split by whitespace 
-    or underscores into parts, and the function returns the part corresponding to 
-    the given index.
-
-    Parameters:
-    file_path (str): The full path to the file from which the information is to be extracted.
-    part (int, optional): The index of the part of the file name to return. Defaults to 0.
+    Extracts data from a text file, creates a Meas object based on the data and metadata extracted 
+    from the file name.
+    
+    Args:
+        file_path (str): Path to the text file containing numerical data.
 
     Returns:
-    str or None: The requested part of the file name if available; otherwise, None.
-    
-    Raises:
-    FileNotFoundError: If the specified file path does not exist.
-    """
-    try:
-        # Check if the file exists
-        if check_file_exists(file_path):
-            raise FileNotFoundError(f"File '{file_path}' not found.")
-
-        # Extract the file name without extension
-        file_name = os.path.splitext(os.path.basename(file_path))[0]
-        
-        # Split the file name into parts based on whitespace or underscores
-        index = file_name.split()
-        
-        # Return the requested part of the file name if it exists
-        if len(index) > part:
-            return index[part]
-        else:
-            return None
-    except Exception as e:
-        # Print any exception that occurs and return None
-        print(f"An error occurred: {e}")
-        return None
-    
-#%%
-def extract_data_from_file(file_path, df=None):
-    """
-    Extracts data from a specified file and appends it to a DataFrame.
-
-    This function reads numeric data from a file, processes it, and updates a DataFrame
-    with the extracted data. The file should contain numeric data separated by new lines.
-    The function also retrieves metadata from the file name to create appropriate time stamps.
-
-    Parameters:
-    file_path (str): The path to the file containing the data to be extracted.
-    df (pd.DataFrame, optional): The DataFrame to which the extracted data will be appended.
-                                  If not provided, a new DataFrame will be created.
-
-    Returns:
-    pd.DataFrame: The updated DataFrame containing the extracted and processed data.
+        Meas: A Meas object containing the data from the file and metadata extracted from the filename.
 
     Raises:
-    FileNotFoundError: If the file specified by `file_path` does not exist.
-    ValueError: If the file contains non-numeric data.
+        FileNotFoundError: If the specified file does not exist.
+        ValueError: If the file contains non-numeric data or the filename is invalid.
+        ValueError: If there is an error in parsing the timestamp in the filename.
     """
     
-    # Initialize DataFrame if not provided
-    if df is None:
-        df = pd.DataFrame()
-
+    logger.info(f"Starting to process the file: {file_path}")
+    
     # Check if the file exists
-    if check_file_exists(file_path):
+    if not Path(file_path).is_file():
+        logger.error(f"File '{file_path}' not found.")
         raise FileNotFoundError(f"File '{file_path}' not found.")
+    
+    logger.info(f"File '{file_path}' exists, proceeding with data extraction.")
+    
+    # Read the contents of the file
+    y_data = read_text_file(file_path).split('\n')
 
+    # Ensure all data in the file is numeric
+    if not all(map(str.isdigit, y_data)):
+        logger.error(f"File '{file_path}' contains non-numeric data.")
+        raise ValueError(f"File '{file_path}' contains non-numeric data.")
+    
+    logger.info(f"Data successfully read and validated as numeric from file '{file_path}'.")
+
+    # Convert the data to a numpy array of floats
+    y_data = np.array(y_data).astype(float)
+    x_data = np.cumsum(y_data)
+
+    # Extract metadata from the file name
+    file_name = extract_file_name(file_path)
+    splitted_file_name = file_name.split()
+
+    if len(splitted_file_name) != 3:
+        logger.error(f"Filename '{file_name}' is invalid. Expected format: 'name date time'.")
+        raise ValueError(f"Filename '{file_name}' is invalid. Expected format: 'name date time'.")
+    
+    logger.info(f"Filename '{file_name}' is valid, proceeding with metadata extraction.")
+
+    # Combine the date and time for parsing
+    start_timestamp = splitted_file_name[1] + splitted_file_name[2]
     try:
-        # Read the file and split its content into lines
-        with open(file_path, "r") as file:
-            y_data = file.read().split('\n')
+        starttime = datetime.strptime(start_timestamp, '%Y-%m-%d%H-%M-%S')
+    except ValueError as e:
+        logger.error(f"Error parsing start_timestamp '{start_timestamp}': {e}")
+        raise ValueError(f"Error parsing start_timestamp '{start_timestamp}': {e}")
+    
+    logger.info(f"Start time '{starttime}' successfully parsed from the filename.")
 
-        # Validate that all data lines are numeric
-        if not all(map(str.isdigit, y_data)):
-            raise ValueError("File contains non-numeric data.")
+    # Calculate the end time based on the cumulative sum of x_data
+    endtime = starttime + timedelta(milliseconds=x_data[-1])
 
-        # Convert the list of string data to float numpy array
-        y_data = np.array(y_data).astype(float)
+    logger.info(f"End time calculated as '{endtime}'.")
 
-        # Compute cumulative sum for x_data
-        x_data = np.cumsum(y_data)
+    # Extract components from the file name
+    meas_name = splitted_file_name[0]
+    meas_number = extract_numeric_prefix(meas_name)
+    pair_number = extract_numeric_suffix(meas_name)
+    meas_type = remove_digits(meas_name)[0]
+    gender = remove_digits(meas_name)[1]
 
-        # Extract metadata from the file name
-        shift = 0
-        meas_name = get_info_from_path(file_path).split('_')[0]
-        start_timestamp = get_info_from_path(file_path, 1) + get_info_from_path(file_path, 2)
-        
-        # Convert start timestamp to pandas datetime object
-        try:
-            df_timestamp = pd.to_datetime(start_timestamp, format='%Y-%m-%d%H-%M-%S', errors='raise')
-        except ValueError as e:
-            print(f"Error: Invalid timestamp format for {start_timestamp} in file {file_path}")
-            print(f"Details: {e}")
-            
-        # Create a new index name for the row
-        index_name = f"{get_info_from_path(file_path)}_{str(shift)}"
+    logger.info(f"Metadata extracted from filename: "
+                f"meas_number={meas_number}, pair_number={pair_number}, "
+                f"meas_type={meas_type}, gender={gender}.")
 
-        # Create a DataFrame with the new row of data
-        new_row_data = pd.DataFrame({
-            'x': [x_data],
-            'y': [y_data],
-            'shift': [shift],
-            'meas_name': [meas_name],
-            'starttime': [df_timestamp],
-            'endtime': [df_timestamp + pd.to_timedelta(x_data[-1], unit='ms')],
-            'duration': [(df_timestamp + pd.to_timedelta(x_data[-1], unit='ms') - df_timestamp).total_seconds() / 60]
-        }, index=[index_name])
-
-        # Append the new row to the existing DataFrame
-        df = pd.concat([df, new_row_data])
-        return df
-
-    except Exception as e:
-        # Print any exception that occurs and return the unchanged DataFrame
-        print(f"An error occurred: {e}")
-        return df
+    # Create a new Meas object
+    new_meas = Meas(
+        x_data=x_data,
+        y_data=y_data,
+        meas_number=meas_number,
+        meas_type=meas_type,
+        gender=gender,
+        pair_number=pair_number,
+        shift=0.0,  # Assuming shift is 0.0, can be updated as needed
+        starttime=starttime,
+        endtime=endtime
+    )
+    
+    logger.info(f"Meas object created successfully for file '{file_name}'.")
+    
+    return new_meas
 
 #%%
-def scatter_plot(series_df: pd.DataFrame, title: str = None):
+def scatter_plot(meas_list: list[Meas], title: str = None):
     """
-    Creates a scatter plot from the data in the provided DataFrame.
+    Creates a scatter plot from a list of Meas objects.
 
-    This function generates a scatter plot where each series in the DataFrame is plotted as a separate trace.
-    The x-axis represents time in milliseconds, and the y-axis represents the time between heartbeats (RR intervals).
-
-    Parameters:
-    - series_df (pd.DataFrame): DataFrame containing time series data. 
-                                The DataFrame should have columns 'x' (time points) and 'y' (RR intervals).
-    - title (str, optional): The title of the plot. If not provided, a default title will be generated based on the data.
+    Args:
+        meas_list (list[Meas]): List of Meas objects containing the data to plot.
+        title (str, optional): Title of the plot. Defaults to None.
 
     Returns:
-    - fig (plotly.graph_objs._figure.Figure): The generated scatter plot figure.
-    - title (str): The title used for the plot.
-    
-    Raises:
-    - TypeError: If `series_df` is not a DataFrame or the 'x' and 'y' columns do not contain numpy arrays.
-    - ValueError: If the DataFrame is empty or lacks required columns.
+        fig: Plotly figure with the created scatter plot.
+        plot_title: Title used for the plot.
     """
-
-    # Validate the input DataFrame
-    if not validate_series_df(series_df):
-        raise ValueError("Validation failed in scatter_plot function.")
-
+    
     # Determine the overall time range of the series
-    stop = max(series_df['x'].apply(lambda arr: arr[-1] if len(arr) > 0 else float('-inf')))
-    start = min(series_df['x'].apply(lambda arr: arr[0] if len(arr) > 0 else float('inf')))
+    stop = max(meas.data.x_data[-1] for meas in meas_list if len(meas.data.x_data) > 0)
+    start = min(meas.data.x_data[0] for meas in meas_list if len(meas.data.x_data) > 0)
 
-    # Generate names from the DataFrame index
-    names = series_df.index.tolist()
+    # Prepare data for plotting
+    data = []
+    legend_labels = []
+    scatter_colors = []  # Optionally define colors for each series
 
-    # Initialize the scatter plot
-    fig = px.scatter()
+    for meas in meas_list:
+        data.append({'x': meas.data.x_data, 'y': meas.data.y_data})
+        legend_labels.append(str(meas))  # Use the __repr__ or __str__ method for labeling
+        scatter_colors.append(None)  # You can customize colors if needed
 
-    # Add each series as a scatter trace
-    for i in range(series_df.shape[0]):
-        name = names[i].split()[0]  # Use the first part of the index name
-        
-        fig.add_scatter(
-            x=series_df.iloc[i]['x'],
-            y=series_df.iloc[i]['y'],
-            mode='markers',
-            name=name
-        )
-
-    # Update plot layout
-    fig.update_layout(
-        xaxis_title="Time [ms]",
-        yaxis_title="Time Between Heartbeats [ms]",
+    # Set the plot title if not provided
+    plot_title = title if title else f"Range from {start} to {stop} for {', '.join(legend_labels)}"
+    
+    # Create the scatter plot using the existing function
+    fig = create_multi_series_scatter_plot_plotly(
+        data,
+        legend_labels=legend_labels,
+        plot_title=plot_title,
+        x_label="Time [ms]",
+        y_label="Time Between Heartbeats [ms]",
+        scatter_colors=scatter_colors,
+        mode='markers'
     )
 
-    # Set the title if not provided
-    if not title:
-        title = f"{names} RANGE from {start} to {stop}"
-
-    fig.update_layout(title=title)
-
-    return fig, title
+    return fig, plot_title
 
 #%%
-def density_plot(series_df: pd.DataFrame, sd_threshold: float = 3, title: str = None):
+def density_plot(meas_list: list, sd_threshold: float = 3, title: str = None):
     """
-    Creates a density plot (histogram) for each time series in the provided DataFrame.
+    Creates a density plot (histogram) for each time series in the provided list of Meas objects using Plotly.
 
-    This function generates a density plot where each series in the DataFrame is plotted as a separate histogram trace.
-    Vertical lines indicating outliers (based on a specified standard deviation threshold) are added to each plot.
-
-    Parameters:
-    - series_df (pd.DataFrame): DataFrame containing time series data.
-                                The DataFrame should have an index with names and a 'y' column containing the RR intervals.
-    - sd_threshold (float, optional): The standard deviation multiplier for determining outliers. Default is 3.
-    - title (str, optional): The title of the plot. If not provided, a default title will be generated.
+    Args:
+        meas_list (list[Meas]): List of Meas objects containing the data to plot.
+        sd_threshold (float, optional): The standard deviation multiplier for determining outliers. Default is 3.
+        title (str, optional): The title of the plot. If not provided, a default title will be generated.
 
     Returns:
-    - fig (plotly.graph_objs._figure.Figure): The generated density plot figure.
-    - title (str): The title used for the plot.
-
-    Raises:
-    - TypeError: If `series_df` is not a DataFrame, or if the 'y' column does not contain numpy arrays.
-    - ValueError: If the DataFrame is empty or lacks the required 'y' column.
-    - RuntimeError: If `series_df` contains non-numeric data that cannot be processed.
+        fig: Plotly figure with the created density plot.
+        title: Title used for the plot.
     """
     
+    title = "Density Plot of RR-intervals" if title is None else title
+    # Prepare data for plotting
+    data = []
+    legend_labels = []
     
-    # Validate the input DataFrame
-    if not validate_series_df(series_df):
-        raise ValueError("Validation failed in density_plot function.")
-    
-    # Generate names from the DataFrame index
-    names = series_df.index.tolist()
+    for meas in meas_list:
+        data.append({'x': meas.data.y_data})  # Use the meas representation for labeling
+        legend_labels.append(str(meas))
 
-    # Initialize the density plot
-    fig = go.Figure()
-
-    # Add each series as a histogram trace
-    for i, y_data in enumerate(series_df['y']):
-        if not np.issubdtype(y_data.dtype, np.number):
-            raise RuntimeError(f"Non-numeric data found in 'y' column for index {names[i]}.")
-        
-        # Check if y_data is empty or contains only NaN
-        if y_data.size == 0 or np.all(np.isnan(y_data)):
-            print(f"No valid data for index {names[i]}, skipping this series.")
-            continue
-
-        # Create the histogram trace
-        trace = go.Histogram(
-            x=y_data, 
-            histnorm='probability density', 
-            name=names[i],
-            opacity=0.75
-        )
-        fig.add_trace(trace)
-        
-        # Calculate and add vertical lines for outliers
+    # Calculate outlier thresholds
+    outlier_info = {}
+    for meas in meas_list:
+        y_data = meas.data.y_data
         outlier_low = round(np.nanmean(y_data) - sd_threshold * np.nanstd(y_data))
         outlier_high = round(np.nanmean(y_data) + sd_threshold * np.nanstd(y_data))
-        trace_color = "gray"
-        
-        fig.add_vline(
-            x=outlier_low, 
-            line_dash="dash", 
-            line_color=trace_color,
-            annotation_text=f"Outlier Low {names[i]}: {outlier_low}", 
-            annotation_position="top left", 
-            annotation_textangle=90
-        )
-        
-        fig.add_vline(
-            x=outlier_high, 
-            line_dash="dash", 
-            line_color=trace_color,
-            annotation_text=f"Outlier High {names[i]}: {outlier_high}", 
-            annotation_position="top right",  
-            annotation_textangle=90
-        )
-    
-    # Update plot layout
-    fig.update_layout(
-        xaxis_title="RR-interval [ms]",
-        yaxis_title="Density",
-        barmode='overlay'  # Overlay histograms for better comparison
+        outlier_info[str(meas)] = (outlier_low, outlier_high)
+
+    # Create the density plot using the histogram function in Plotly
+    fig = create_multi_series_histogram_plotly(
+        data,
+        legend_labels=legend_labels,
+        plot_title=title,
+        x_label="RR-interval [ms]",
+        y_label="Density",
+        show_grid=True
     )
-    
-    # Set the title if not provided
-    if title is None:
-        title = f"{names} Distribution of RR-intervals"
-    
-    fig.update_layout(title=title)
+
+    # Add vertical lines for outlier thresholds
+    for meas_label, (outlier_low, outlier_high) in outlier_info.items():
+        fig.add_vline(x=outlier_low, line=dict(color='gray', dash='dash'), annotation_text=f'Outlier Low {meas_label}: {outlier_low}')
+        fig.add_vline(x=outlier_high, line=dict(color='gray', dash='dash'), annotation_text=f'Outlier High {meas_label}: {outlier_high}')
 
     return fig, title
 
 #%%
-# =============================================================================
-# def corr_heatmap(df, title=None, color='viridis'):
-#     # Tworzenie własnej mapy kolorów z 20 odcieniami od -1 do 1
-#     colors = sns.color_palette(color, 20)
-#     cmap = LinearSegmentedColormap.from_list('custom_colormap', colors, N=20)
-#     
-#     with sns.axes_style("white"):
-#         f, ax = plt.subplots(figsize=(10, 10))
-#         sns.heatmap(df,
-# # =============================================================================
-# # to annotate on heatmap you need previous version of matplotlib              
-# # pip install matplotlib==3.7.3
-# # =============================================================================
-#                     annot=df.round(2),
-#                     vmax=1,
-#                     vmin=-1,
-#                     center=0,
-#                     square=True,
-#                     xticklabels=df.columns,
-#                     yticklabels=df.index,
-#                     cmap=cmap,
-#                     linewidths=.5,
-#                     cbar_kws={"shrink": 0.7, 'ticks': np.linspace(-1, 1, 21)})
-#         # Ustawienie rotacji etykiet
-#         ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
-#         ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
-#     
-#     if not title:
-#         title = 'heatmap'
-#     
-#     plt.title(title)
-# 
-#     return f, title
-# =============================================================================
+
 
 #%%
 def trim(series_df, start=None, end=None):

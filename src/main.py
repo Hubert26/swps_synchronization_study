@@ -6,46 +6,34 @@ Created on Wed Nov  8 10:45:31 2023
 """
 
 import pandas as pd
-import numpy as np
-import copy
-import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.io as pio
-pio.renderers.default='browser'
-import seaborn as sns
-import glob
 import os
-from scipy.interpolate import interp1d
-from scipy.stats import pearsonr
-from collections import OrderedDict
-import re
-from IPython.display import display
 
-from data_processing import *
-
-#%%
-data_df = pd.DataFrame()
-result_df = pd.DataFrame()
+from src.config import *
+from src.data_processing import *
+from src.utils.file_utils import list_file_paths
 
 
 #%%
-#file_paths = glob.glob('data/cooperation/**')
-file_paths = glob.glob('data/relaxation/**')
+meas_list = []
 
-for i in range(len(file_paths)):
-    data_df = extract_data_from_file(file_paths[i], data_df)
+#%%
+file_paths = list_file_paths(DATA_DIR)
+
+for path in file_paths:
+    meas_list.append(extract_data_from_file(path))
     
+#%%
+
 #%%
 #Ploting oryginal signals
-for index, row in data_df.iterrows():
-    meas_df = row.to_frame().T
-    output_plot_folder = os.path.join(output_folder, 'oryginal_meas', "hist_oryginal")
-    fig_hist, title_hist = density_plot(meas_df)
-    save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
+for meas in meas_list:
+    file_name = str(meas) + str(meas.data.range()[0]) + ".html"
+
+    fig_hist, title_hist = density_plot([meas])
+    save_html_plotly(fig_hist, HISTOGRAM_ORYGINAL_PLOTS_DIR / file_name)
     
-    output_plot_folder = os.path.join(output_folder, 'oryginal_meas', "scatter_oryginal")
-    fig_scatter, title_scatter = scatter_plot(meas_df)
-    save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
+    fig_scatter, title_scatter = scatter_plot([meas])
+    save_html_plotly(fig_scatter,  SCATTER_ORYGINAL_PLOTS_DIR / file_name)
 
 #%%
 #Ploting oryginal pair signals

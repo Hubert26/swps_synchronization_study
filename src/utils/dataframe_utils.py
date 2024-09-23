@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 import openpyxl
 
+from utils.string_utils import split_string
 
 #%%
 def read_excel_file(file_path):
@@ -72,13 +73,15 @@ def read_csv_file(file_path, **kwargs):
         raise RuntimeError(f"An unexpected error occurred: {e}")
 
 #%%
-def write_to_excel(dataframe, file_path):
+def write_to_excel(dataframe, file_path, **kwargs):
     """
-    Writes a DataFrame to an Excel file.
+    Writes a DataFrame to an Excel file with optional parameters.
 
     Args:
         dataframe (pd.DataFrame): The DataFrame to write.
-        file_path (str): The path where the Excel file will be saved.
+        file_path (str or Path): The path where the Excel file will be saved.
+        **kwargs: Additional keyword arguments for `to_excel()`, such as 'index', 'sheet_name'.
+                  'mode' is handled for `ExcelWriter`.
 
     Raises:
         ValueError: If the DataFrame is not valid or if there is an error during file writing.
@@ -87,19 +90,32 @@ def write_to_excel(dataframe, file_path):
     # Validate the input dataframe
     if not isinstance(dataframe, pd.DataFrame):
         raise ValueError("The provided input is not a valid pandas DataFrame.")
+
+    # Convert file_path to a string if it is a Path object
+    if isinstance(file_path, Path):
+        file_path = str(file_path)
     
+    # Ensure the file path ends with .xlsx
+    if not file_path.endswith('.xlsx'):
+        file_path += '.xlsx'
+
+    # Extract and remove 'index' and 'sheet_name' from kwargs for to_excel()
+    index = kwargs.pop('index', False)  # Default is False if not provided
+    sheet_name = kwargs.pop('sheet_name', 'Sheet1')
+
+    # Extract 'mode' for ExcelWriter, defaulting to 'w' (write mode)
+    mode = kwargs.pop('mode', 'w')
+
     # Attempt to write the DataFrame to an Excel file
     try:
-        dataframe.to_excel(file_path, index=False, engine='openpyxl')
+        with pd.ExcelWriter(file_path, engine='openpyxl', mode=mode) as writer:
+            dataframe.to_excel(writer, sheet_name=sheet_name, index=index, **kwargs)
         print(f"DataFrame successfully written to {file_path}")
     except ValueError as ve:
-        # Catch errors related to the DataFrame or file writing issues
         raise ValueError(f"Failed to write DataFrame to Excel: {ve}")
     except OSError as oe:
-        # Catch errors related to file system issues
         raise OSError(f"Failed to create or write to file: {oe}")
     except Exception as e:
-        # Catch any other unexpected errors
         raise RuntimeError(f"An unexpected error occurred: {e}")
 
 #%%
@@ -166,3 +182,30 @@ def filter_dataframe(dataframe, **filters):
             filtered_dataframe = filtered_dataframe[filtered_dataframe[column] == value]
     
     return filtered_dataframe
+
+#%%
+def group_columns_by_prefix(df, delimiter='_', **kwargs):
+    """
+    Groups DataFrame columns by the prefix (substring before the first occurrence of the delimiter).
+
+    Args:
+        df (pd.DataFrame): The DataFrame whose columns need to be grouped.
+        delimiter (str): The character or string by which the column name will be split to determine the prefix.
+        **kwargs: Optional keyword arguments for the split_string function, such as 'maxsplit'.
+
+    Returns:
+        dict: A dictionary where keys are the column prefixes and values are lists of columns sharing that prefix.
+    """
+    column_groups = {}
+
+    for col in df.columns:
+        # Split the column name using the delimiter and get the prefix
+        prefix = split_string(col, delimiter, **kwargs)[0]
+        
+        # Group the columns by the prefix
+        if prefix not in column_groups:
+            column_groups[prefix] = []
+        
+        column_groups[prefix].append(col)
+    
+    return column_groups
