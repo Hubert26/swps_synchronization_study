@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['src\\main.py', 'src\\data_processing.py', 'src\\classes.py', 'src\\config.py', 'src\\utils\\plotly_utils.py', 'src\\utils\\file_utils.py', 'src\\utils\\matplotlib_utils.py']
+recent_files = ['src\\main.py', 'src\\functions.py', 'src\\classes.py', 'src\\config.py', 'src\\signals_visualization.py', 'src\\utils\\plotly_utils.py', 'src\\utils\\file_utils.py', 'src\\utils\\matplotlib_utils.py', 'src\\utils\\math_utils.py', 'src\\utils\\string_utils.py', '..\\..\\..\\..\\anaconda3\\lib\\site-packages\\scipy\\stats\\_stats_py.py']
 
 [main]
 version = 0.2.0

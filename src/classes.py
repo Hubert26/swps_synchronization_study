@@ -15,6 +15,10 @@ from dataclasses import field
 
     
 #%%
+class DataValidationError(Exception):
+    pass
+
+#%%
 class Data:
     x_data: np.ndarray
     y_data: np.ndarray
@@ -57,19 +61,37 @@ class Data:
     
         Returns:
             tuple: The first and last values of the trimmed x_data (representing the new start and end of the trimmed range).
+    
+        Raises:
+            ValueError: If the selected indices are empty, or if new_start >= new_end.
         """
+        # Check if the provided range is valid
+        if new_start >= new_end:
+            raise ValueError(f"Invalid range: new_start ({new_start}) must be less than new_end ({new_end}).")
+    
         # 1. Select the indices where x_data is within the specified range [new_start, new_end]
         selected_indices = np.where((self.x_data >= new_start) & (self.x_data <= new_end))[0]
-        
+    
+        # Check if any indices are selected
+        if selected_indices.size == 0:
+            raise ValueError(f"No data points found in the range [{new_start}, {new_end}].")
+    
         # 2. Extract the trimmed x_data and y_data using the selected indices
         trimmed_x = self.x_data[selected_indices]
         trimmed_y = self.y_data[selected_indices]
-
+    
+        # Ensure trimmed_x and trimmed_y are not empty or mismatched
+        if len(trimmed_x) == 0 or len(trimmed_y) == 0:
+            raise ValueError(f"Trimming resulted in empty data. Check the provided range [{new_start}, {new_end}].")
+        if len(trimmed_x) != len(trimmed_y):
+            raise ValueError("Mismatch between the lengths of trimmed x_data and y_data.")
+    
+        # 3. Update the x_data values by normalizing them to start from first y_data
         new_x_data = trimmed_x - trimmed_x[0] + trimmed_y[0]
     
         # 4. Update the internal x_data and y_data arrays using the update method
         self.update(new_x_data=new_x_data, new_y_data=trimmed_y)
-
+    
         # 5. Return the new start (first value) and end (last value) of the trimmed x_data
         return trimmed_x[0], trimmed_x[-1]
     
@@ -239,20 +261,52 @@ class Meas:
         """
         Splits a Meas object into multiple Meas objects wherever there's a 
         mismatch between np.diff(x_data) and y_data, indicating a gap in the data.
-        
+    
         Returns:
             A list of Meas objects, each representing a contiguous segment of data.
         """
-
-        def recursive_split(x_data, y_data, starttime):
+        def recursive_split(x_data, y_data, starttime, threshold=1e-2):
             # Calculate the differences between consecutive x_data elements
             diff_x_data = np.diff(x_data)
-
-            # Find indices where x_data diff does not match the corresponding y_data values
-            mismatch_indices = np.where(diff_x_data != y_data[:-1])[0]
-
-            if len(mismatch_indices) == 0:
-                # No gaps detected, return a single Meas object
+            
+            # Check if diff_x_data has more than one element
+            if len(diff_x_data) > 1:
+                # Find indices where x_data diff does not match the corresponding y_data values
+                mismatch_indices = np.where(np.abs(diff_x_data - y_data[1:]) > threshold)[0]
+                norm_x_data = x_data - x_data[0] + y_data[0]
+                
+                if len(mismatch_indices) == 0:
+                    # No gaps detected, return a single Meas object
+                    return [Meas(
+                        x_data=norm_x_data,
+                        y_data=y_data,
+                        meas_number=self.metadata.meas_number,
+                        meas_type=self.metadata.meas_type,
+                        gender=self.metadata.gender,
+                        pair_number=self.metadata.pair_number,
+                        shift=self.metadata.shift,
+                        starttime=starttime,
+                        endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
+                    )]
+            else:
+                # If there are not enough elements to create a mismatch, return the original object
+                return [Meas(
+                    x_data=norm_x_data,
+                    y_data=y_data,
+                    meas_number=self.metadata.meas_number,
+                    meas_type=self.metadata.meas_type,
+                    gender=self.metadata.gender,
+                    pair_number=self.metadata.pair_number,
+                    shift=self.metadata.shift,
+                    starttime=starttime,
+                    endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
+                )]
+    
+            # Find the first gap
+            first_mismatch = mismatch_indices[0] + 1 if len(mismatch_indices) > 0 else None
+    
+            # If no mismatches, return the original object
+            if first_mismatch is None or first_mismatch >= len(x_data):
                 return [Meas(
                     x_data=x_data,
                     y_data=y_data,
@@ -264,29 +318,24 @@ class Meas:
                     starttime=starttime,
                     endtime=starttime + timedelta(milliseconds=x_data[-1])
                 )]
-
-            # Find the first gap
-            first_mismatch = mismatch_indices[0] + 1
-
+    
             # Split x_data and y_data at the gap
             y_data_1, y_data_2 = y_data[:first_mismatch], y_data[first_mismatch:]
             x_data_1, x_data_2 = x_data[:first_mismatch], x_data[first_mismatch:]
-
-            # Normalize the x_data arrays so they start from 0
+    
+            # Normalize the x_data arrays so they start from first element of y_data
             x_data_1 = x_data_1 - x_data_1[0] + y_data_1[0]
-            x_data_2 = x_data_2 - x_data_2[0] + y_data_2[0]
-
+    
             # Calculate the new start time for the second segment
-            starttime_2 = starttime + timedelta(milliseconds=x_data_1[-1])
-            + timedelta(milliseconds=x_data[first_mismatch] - x_data[first_mismatch - 1])
-            - timedelta(milliseconds=diff_x_data[first_mismatch])
-
+            # Rounding off to the nearest millisecond without floating point issues
+            starttime_2 = starttime + timedelta(milliseconds=(norm_x_data[first_mismatch] - y_data[first_mismatch]))
+    
             # Recursively split the two segments
             return (
                 recursive_split(x_data_1, y_data_1, starttime) +
                 recursive_split(x_data_2, y_data_2, starttime_2)
             )
-
+    
         # Initiate recursive splitting
         return recursive_split(self.data.x_data, self.data.y_data, self.metadata.starttime)
 
@@ -335,25 +384,29 @@ class Meas:
         # 4. Update the Metadata object with the new starttime and endtime.
         self.metadata.update(new_starttime=new_starttime, new_endtime=new_endtime)
         
+    def shift_right(self, shift_ms: float):
+        """
+        Shifts the starttime of the Meas object to the right by the given amount of time (in milliseconds).
+        The shift attribute is updated accordingly (in seconds).
+        
+        Args:
+            shift_ms (float): The amount of time (in milliseconds) to shift the signal.
+        """
+        # Dodaj przesunięcie do starttime
+        new_starttime = self.metadata.starttime + timedelta(milliseconds=shift_ms)
+    
+        # Konwertuj milisekundy na sekundy do zapisu w shift
+        shift_s = shift_ms / 1000.0
+        new_shift = self.metadata.shift + shift_s
+    
+        # Zaktualizuj obiekt Meas z nowym starttime i shift
+        self.update(new_starttime=new_starttime, new_shift=new_shift)    
+          
     def __repr__(self):
         return f"Meas(data={self.data!r}, metadata={self.metadata!r})"
     
     def __str__(self):
         return f"{self.metadata.meas_number}{self.metadata.meas_type}{self.metadata.gender}{self.metadata.pair_number}_{self.metadata.shift}"
-
-#%%
-def test_df(m1, m2):
-    # Tworzenie DataFrame z referencjami do obiektów meas
-    df = pd.DataFrame({
-        'pair': [m1.pair, m2.pair],
-        'meas_obj': [m1, m2]
-    })
-    
-    # Aktualizacja x_data w obiekcie meas dla 'Pair1'
-    df.loc[df['pair'] == 'Pair1', 'meas_obj'].values[0].update_data(np.array([100, 200, 300]), np.array([400, 500, 600]))
-    
-    # Sprawdzenie zmian
-    print(df.loc[df['pair'] == 'Pair1', 'meas_obj'].values[0])
 
 #%%
 
@@ -418,22 +471,38 @@ if __name__ == '__main__':
         gender="M", 
         pair_number=1, 
         shift=0.0, 
-        starttime=datetime(2024, 9, 24, 10, 6, 0), 
-        endtime=datetime(2024, 9, 24, 10, 6, 0) + endtime_2
+        starttime=datetime(2024, 9, 24, 10, 5, 1), 
+        endtime=datetime(2024, 9, 24, 10, 5, 1) + endtime_2
     )
     
-    merged_meas = meas1 + meas2
+    y_data_3 = np.array([110, 110, 110, 110, 110])
+    x_data_3 = np.cumsum(y_data_3, dtype=float)
+    endtime_3 = timedelta(milliseconds=x_data_3[-1])
+    
+    meas3 = Meas(
+        x_data=x_data_3, 
+        y_data=y_data_3, 
+        meas_number=1, 
+        meas_type="HR", 
+        gender="M", 
+        pair_number=1, 
+        shift=0.0, 
+        starttime=datetime(2024, 9, 24, 10, 10, 10), 
+        endtime=datetime(2024, 9, 24, 10, 10, 10) + endtime_3
+    )
+    
+    merged_meas = meas1 + meas2 + meas3
     
     splitted_meas_list = merged_meas.split()
     
-    merged_x = np.concatenate((x_data_1, x_data_2))
-    merged_y = np.concatenate((y_data_1, y_data_2))
+    merged_x = np.concatenate((x_data_1, x_data_2, x_data_3))
+    merged_y = np.concatenate((y_data_1, y_data_2, y_data_3))
+    
     
 #%%
-
-    
-#%%
-diff_x_data = np.diff(merged_x)
-cumsum_y_merged = np.cumsum(merged_y)
-
-mismatch_indices = np.where(diff_x_data != merged_y[:-1])[0]
+# =============================================================================
+#     diff_x_data = np.diff(merged_x)
+#     cumsum_y_merged = np.cumsum(merged_y)
+#     
+#     mismatch_indices = np.where(diff_x_data != merged_y[:-1])[0]
+# =============================================================================

@@ -167,7 +167,6 @@ def save_html_plotly(fig, file_path: str) -> None:
     if isinstance(fig, go.Figure):
         if file_extension == "html":
             pio.write_html(fig, file_path)
-            print("Figure saved successfully!")
     else:
         raise TypeError("The 'fig' parameter must be a Plotly 'go.Figure'.")
 

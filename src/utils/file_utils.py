@@ -28,6 +28,29 @@ def create_directory(directory):
             os.makedirs(directory)
         except Exception as e:
             raise OSError(f"Failed to create directory: {e}")
+
+#%%
+def delete_directory(directory: str):
+    """
+    Deletes the specified directory and all its contents.
+
+    Args:
+        directory (str): The path to the directory to delete.
+
+    Raises:
+        FileNotFoundError: If the directory does not exist.
+        OSError: If the directory or its contents cannot be deleted.
+    """
+    directory_path = Path(directory)
+    
+    if not directory_path.exists():
+        raise FileNotFoundError(f"Directory '{directory}' does not exist.")
+    
+    try:
+        # Remove the directory and all its contents
+        shutil.rmtree(directory_path)
+    except Exception as e:
+        raise OSError(f"Failed to delete directory: {e}")
         
 #%%
 def list_file_paths(directory, extension=None):

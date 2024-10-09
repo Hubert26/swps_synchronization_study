@@ -3,3 +3,5 @@ __pycache__
 utils/plots/
 draft.py
 plots
+results
+logs

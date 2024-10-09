@@ -6,169 +6,153 @@ Created on Wed Nov  8 10:45:31 2023
 """
 
 import pandas as pd
-import os
+
 
 from src.config import *
-from src.data_processing import *
-from src.utils.file_utils import list_file_paths
+from src.config import intervals
+from src.classes import Data, Metadata, Meas
+import importlib
+from src.functions import *
+from src.utils.file_utils import list_file_paths, create_directory, delete_directory
+#%%
+
 
 
 #%%
-meas_list = []
-
-#%%
-file_paths = list_file_paths(DATA_DIR)
-
-for path in file_paths:
-    meas_list.append(extract_data_from_file(path))
+if __name__ == '__main__':
     
-#%%
-
-#%%
-#Ploting oryginal signals
-for meas in meas_list:
-    file_name = str(meas) + str(meas.data.range()[0]) + ".html"
-
-    fig_hist, title_hist = density_plot([meas])
-    save_html_plotly(fig_hist, HISTOGRAM_ORYGINAL_PLOTS_DIR / file_name)
+    file_paths = list_file_paths(DATA_DIR)
+    meas_list = load_data(file_paths)
     
-    fig_scatter, title_scatter = scatter_plot([meas])
-    save_html_plotly(fig_scatter,  SCATTER_ORYGINAL_PLOTS_DIR / file_name)
+    final_corr_results = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_state'])
+    final_interp_pairs = []
+    
+    gruped_meas = group_meas(meas_list, ["meas_type", "meas_number"])
 
-#%%
-#Ploting oryginal pair signals
-for meas_category, meas_type, pattern in meas_types:
-    regex_pattern = f"{meas_type}{pattern}"
-    selected_df = data_df[data_df.index.str.contains(regex_pattern, regex=True)]
-    merged_df = merge_meas(selected_df)
-    matching_pairs, unmatched_series = find_pairs(merged_df)
-    for pair in matching_pairs:
-        # Extract the corresponding rows from series_df for the given pair
-        pair_df = merged_df.loc[merged_df['meas_name'].isin(pair)].iloc[[0, 1]]
-        # Align the pair in time
-        pair_df = time_align_pair(pair_df, time_ms_threshold=1000)
-            
-        # Generate and save a histogram plot for the trimmed pair
-        output_plot_folder = os.path.join(output_folder, meas_category, meas_type, 'oryginal_pairs', "hist_pairs_oryginal")
-        fig_hist, title_hist = density_plot(pair_df)
-        save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
+    for key, group in gruped_meas.items():
+        filtered_meas = filter_meas(group)
+        merged_meas = merge_grouped(filtered_meas)
+        pairs = find_pairs(merged_meas)
         
-        # Generate and save a scatter plot for the trimmed pair
-        output_plot_folder = os.path.join(output_folder, meas_category, meas_type, 'oryginal_pairs', "scatter_pairs_oryginal")
-        fig_scatter, title_scatter = scatter_plot(pair_df)
-        save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
-
-#%%
-#Ploting filtered pair signals
-for meas_category, meas_type, pattern in meas_types:
-    regex_pattern = f"{meas_type}{pattern}"
-    selected_df = data_df[data_df.index.str.contains(regex_pattern, regex=True)]
-    filtered_df = filter_series(selected_df)
-    merged_df = merge_meas(filtered_df)
-    matching_pairs, unmatched_series = find_pairs(merged_df)
-    for pair in matching_pairs:
-        # Extract the corresponding rows from series_df for the given pair
-        pair_df = merged_df.loc[merged_df['meas_name'].isin(pair)].iloc[[0, 1]]
-        # Align the pair in time
-        pair_df = time_align_pair(pair_df, time_ms_threshold=1000)
-            
-        # Generate and save a histogram plot for the trimmed pair
-        output_plot_folder = os.path.join(output_folder, meas_category,  meas_type, 'filtered_pairs', "hist_pairs_filtered")
-        fig_hist, title_hist = density_plot(pair_df)
-        save_plot(fig_hist, title_hist, folder_name=output_plot_folder, format="html")
+        meas_type, meas_number = key
         
-        # Generate and save a scatter plot for the trimmed pair
-        output_plot_folder = os.path.join(output_folder, meas_category, meas_type, 'filtered_pairs', "scatter_pairs_filtered")
-        fig_scatter, title_scatter = scatter_plot(pair_df)
-        save_plot(fig_scatter, title_scatter, folder_name=output_plot_folder, format="html")
-    
+        # Get time intervals for the given measurement number and type
+        selected_intervals = get_time_intervals(meas_number, meas_type)
+        
+        for meas1, meas2 in pairs:
+            
+            best_corr_results = []
+            best_interp_pairs = []
+            
+            # Iterate through the selected time intervals
+            for (start_ms, end_ms), meas_state in selected_intervals.items():
+                try:
+                    # Determine the earlier starttime to use as reference
+                    ref_starttime = min(meas1.metadata.starttime, meas2.metadata.starttime)
+                    
+                    trimmed_meas1 = trim_meas(meas1, start_ms, end_ms, starttime=ref_starttime)
+                    trimmed_meas2 = trim_meas(meas2, start_ms, end_ms, starttime=ref_starttime)
+                except ValueError as e:
+                    logger.warning(f"Trimming meas to interval faild. Skipping pair due to invalid time range: {e}")
+                    continue
+            
+                # Validate the trimmed Meas objects
+                if not (validate_meas_data(trimmed_meas1, 3) and validate_meas_data(trimmed_meas2, 3)):
+                    logger.warning(f"Validation input to calc corr failed for {trimmed_meas1} and {trimmed_meas2} with shift: 0.0 in time interval {start_ms}-{end_ms}. Skipping this pair.")
+                    continue
+                
+                # Initialize lists to store correlation results
+                corr_res_list = []
+                interp_pair_list = []
+                
+                corr_res, interp_pair = calc_corr_weighted((meas1, meas2))
+                if corr_res is not None and interp_pair is not None:
+                    corr_res_list.append(pd.DataFrame([corr_res]))
+                    interp_pair_list.append(interp_pair)
+                
+                # Iterate over various time shift values
+                for shift_ms in range(1000, 5001, 1000):
+                    shifted_meas1 = copy.deepcopy(meas1)
+                    shifted_meas2 = copy.deepcopy(meas2)
+                    shifted_meas1.shift_right(shift_ms)
+                    shifted_meas2.shift_right(shift_ms)
+                    
+                    # Process shifted meas2
+                    if not (validate_meas_data(trimmed_meas1, 3) and validate_meas_data(shifted_meas2, 3)):
+                        logger.warning(f"Validation input to calc corr failed for {trimmed_meas1} and shifted {shifted_meas2} in time interval {start_ms}-{end_ms}. Skipping this pair.")
+                        continue
+                    else:
+                        corr_res, interp_pair = calc_corr_weighted((trimmed_meas1, shifted_meas2))
+                        if corr_res is not None and interp_pair is not None:
+                            corr_res_list.append(pd.DataFrame([corr_res]))
+                            interp_pair_list.append(interp_pair)
+                        
+                    # Process shifted meas1
+                    if not (validate_meas_data(trimmed_meas2, 3) and validate_meas_data(shifted_meas1, 3)):
+                        logger.warning(f"Validation input to calc corr failed for {trimmed_meas2} and shifted {shifted_meas1} in time interval {start_ms}-{end_ms}. Skipping this pair.")
+                        continue
+                    else:
+                        corr_res, interp_pair = calc_corr_weighted((shifted_meas1, trimmed_meas2))
+                        if corr_res is not None and interp_pair is not None:
+                            corr_res_list.append(pd.DataFrame([corr_res]))
+                            interp_pair_list.append(interp_pair)
+                            
+                # Concatenate the results for the current pair
+                if corr_res_list and interp_pair_list:
+                    corr_res_df = pd.concat(corr_res_list, ignore_index=False)
+                    
+                    # Find the best correlation result
+                    max_abs_corr = corr_res_df['corr'].abs().max()
+                    max_corr_rows = corr_res_df[corr_res_df['corr'].abs() == max_abs_corr]
+
+                    if max_corr_rows.shape[0] > 1:
+                        min_shift_index = max_corr_rows['shift_diff'].abs().idxmin()
+                        best_corr_result = best_corr_result = max_corr_rows.iloc[min_shift_index]
+                    else:
+                        best_corr_result = max_corr_rows.iloc[0]
+                    
+                    # Find corresponding interp_pair for best_corr_result
+                    for idx, row in corr_res_df.iterrows():
+                        if (row['corr'] == best_corr_result['corr']) and (row['shift_diff'] == best_corr_result['shift_diff']):
+                            best_interp_pair = interp_pair_list[idx]
+                            break
+
+                    # Save the best correlation result and corresponding interp_pair
+                    best_corr_results.append(best_corr_result)
+                    best_interp_pairs.append(best_interp_pair)
+                    
+            # Final concatenation of the best results
+            if best_corr_results:
+                best_corr_results = pd.DataFrame(best_corr_results)
+                best_corr_results['meas_state'] = meas_state
+            else:
+                best_corr_results = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_state'])
+
+            final_corr_results = pd.concat([final_corr_results, best_corr_results], ignore_index=True)
+            final_interp_pairs += best_interp_pairs
+
 #%%
-#1w BASELINE
-#%%
-meas_type = '1w'
-selected_df = data_df[data_df.index.str.contains(meas_type + '.\d+_1', regex=True)]
-#%%
-filtered_df = filter_series(selected_df)
-merged_df = merge_meas(filtered_df)   
-for (start_time, end_time), meas_state in baseline_1_time_intervals.items():
-    best_corr = process_rr_data(merged_df, group_label = meas_state, start_time_ms = start_time, end_time_ms = end_time)
-
-    result_df = pd.concat([result_df, best_corr])
-#%%
-
-
-
-
-#%%
-#1w COOPERATION
-#%%
-meas_type = '1w'
-selected_df = data_df[data_df.index.str.contains(meas_type + '.\d+_(?!1)', regex=True)]
-filtered_df = filter_series(selected_df)
-merged_df = merge_meas(filtered_df)
-for (start_time, end_time), meas_state in cooperation_1_time_intervals.items():
-    best_corr = process_rr_data(merged_df, group_label = meas_state, start_time_ms = start_time, end_time_ms = end_time)
-
-    result_df = pd.concat([result_df, best_corr])
-#%%
-
-
-
-
-#%%
-#2w BASELINE
-#%%
-meas_type = '2w'
-selected_df = data_df[data_df.index.str.contains(meas_type + '.\d+_1', regex=True)]
-filtered_df = filter_series(selected_df)
-merged_df = merge_meas(filtered_df)
-for (start_time, end_time), meas_state in baseline_2_time_intervals.items():
-    best_corr = process_rr_data(merged_df, group_label = meas_state, start_time_ms = start_time, end_time_ms = end_time)
-
-    result_df = pd.concat([result_df, best_corr])
-#%%
-
-
-
-
-#%%
-#2w COOPERATION
-#%%
-meas_type = '2w'
-selected_df = data_df[data_df.index.str.contains(meas_type + '.\d+_(?!1)', regex=True)]
-filtered_df = filter_series(selected_df)
-merged_df = merge_meas(filtered_df)
-for (start_time, end_time), meas_state in cooperation_2_time_intervals.items():
-    best_corr = process_rr_data(merged_df, group_label = meas_state, start_time_ms = start_time, end_time_ms = end_time)
-
-    result_df = pd.concat([result_df, best_corr])
-
-
-#%%
-file_path = f'{output_folder}/dataset_cooperation.xlsx'
-result_df.to_excel(file_path, index=False)
-
-
-
-
-
-
-#%%
-#TESTOWANIE
 # =============================================================================
-# meas_type = '1w'
-# selected_df = data_df[data_df.index.str.contains(meas_type + '.9_1', regex=True)]
-# 
-# merged_df = merge_meas(selected_df)
-# trim_merged_df = trim(merged_df, 0, 20000)
-# shifted_df = shift_series(merged_df, 5000)
-# trimed_df = trim(shifted_df, 0, 20000)
-# filtered_df = filter_series(trimed_df)
-# 
-# meas_1_df = pd.concat([trim_merged_df.iloc[[0]], trimed_df.iloc[[0]], filtered_df.iloc[[0]]], ignore_index=False)
-# 
-# fig_scatter, title_scatter = scatter_plot(meas_1_df)
-# save_plot(fig_scatter, title_scatter, folder_name=os.path.join(output_folder, f"scatter_pairs"), format="html")
-# 
-# 
+#     folder_path = PLOTS_DIR / 'INTERP_PAIRS'
+#     
+#     for meas1, meas2 in final_interp_pairs:
+#         time_align_pair(meas1, meas2)
+#         
+#         file_name = (
+#             str(meas1) + ';' + str(meas2) 
+#             + str((
+#                 min(meas1.data.range()[0][0], meas2.data.range()[0][0]), 
+#                 max(meas1.data.range()[0][1], meas2.data.range()[0][1])
+#             ))
+#             + ".html"
+#         )
+#         
+#         create_directory(folder_path / 'HISTOGRAM')
+#         fig_hist, title_hist = density_plot([meas1, meas2])
+#         save_html_plotly(fig_hist, folder_path  / 'HISTOGRAM' / file_name)
+#         
+#         create_directory(folder_path / 'SCATTER')
+#         fig_scatter, title_scatter = scatter_plot([meas1, meas2])
+#         save_html_plotly(fig_scatter,  folder_path / 'SCATTER' / file_name)
 # =============================================================================
+
