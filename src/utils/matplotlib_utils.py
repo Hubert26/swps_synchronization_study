@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import numpy as np
 
-from src.utils.file_utils import create_directory
+from utils.file_utils import create_directory
 
 #%%
 def create_bar_plot(data, column, ax, title='', xlabel='', ylabel='Count', color='blue'):

@@ -9,7 +9,7 @@ from pathlib import Path
 import logging
 import sys
 
-from src.utils.file_utils import create_directory, delete_directory
+from utils.file_utils import create_directory, delete_directory
 
 
 # Define directories

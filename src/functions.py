@@ -23,15 +23,15 @@ from IPython.display import display
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-from src.config import *
+from config import *
 
-from src.config import logger, MEAS_TYPES
-from src.classes import Data, Metadata, Meas
-from src.utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
-from src.utils.file_utils import read_text_file, extract_file_name
-from src.utils.matplotlib_utils import save_fig_matplotlib, create_subplots_matplotlib, create_multi_series_bar_chart_matplotlib
-from src.utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
-from src.utils.math_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array
+from config import logger, MEAS_TYPES
+from classes import Data, Metadata, Meas
+from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
+from utils.file_utils import read_text_file, extract_file_name
+#from utils.matplotlib_utils import save_fig_matplotlib, create_subplots_matplotlib, create_multi_series_bar_chart_matplotlib
+from utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
+from utils.math_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array
 
 
 #%%

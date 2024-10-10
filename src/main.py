@@ -8,12 +8,10 @@ Created on Wed Nov  8 10:45:31 2023
 import pandas as pd
 
 
-from src.config import *
-from src.config import intervals
-from src.classes import Data, Metadata, Meas
+from config import *
 import importlib
-from src.functions import *
-from src.utils.file_utils import list_file_paths, create_directory, delete_directory
+from functions import *
+from utils.file_utils import list_file_paths, create_directory, delete_directory
 #%%
 
 

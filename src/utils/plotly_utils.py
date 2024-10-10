@@ -11,7 +11,7 @@ import plotly.io as pio
 pio.renderers.default='browser'
 from pathlib import Path
 
-from src.utils.file_utils import create_directory
+from utils.file_utils import create_directory
 
 #%%
 def create_subplots_plotly(n_plots, n_cols=2, figsize=(30, 5)):
