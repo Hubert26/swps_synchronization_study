@@ -10,7 +10,6 @@ from pathlib import Path
 import pandas as pd
 import openpyxl
 
-from utils.string_utils import split_string
 
 #%%
 def read_excel_file(file_path):
@@ -108,7 +107,7 @@ def write_to_excel(dataframe, file_path, **kwargs):
 
     # Attempt to write the DataFrame to an Excel file
     try:
-        with pd.ExcelWriter(file_path, engine='openpyxl', mode=mode) as writer:
+        with pd.ExcelWriter(file_path,  engine='openpyxl', mode=mode) as writer:
             dataframe.to_excel(writer, sheet_name=sheet_name, index=index, **kwargs)
         print(f"DataFrame successfully written to {file_path}")
     except ValueError as ve:
@@ -182,30 +181,3 @@ def filter_dataframe(dataframe, **filters):
             filtered_dataframe = filtered_dataframe[filtered_dataframe[column] == value]
     
     return filtered_dataframe
-
-#%%
-def group_columns_by_prefix(df, delimiter='_', **kwargs):
-    """
-    Groups DataFrame columns by the prefix (substring before the first occurrence of the delimiter).
-
-    Args:
-        df (pd.DataFrame): The DataFrame whose columns need to be grouped.
-        delimiter (str): The character or string by which the column name will be split to determine the prefix.
-        **kwargs: Optional keyword arguments for the split_string function, such as 'maxsplit'.
-
-    Returns:
-        dict: A dictionary where keys are the column prefixes and values are lists of columns sharing that prefix.
-    """
-    column_groups = {}
-
-    for col in df.columns:
-        # Split the column name using the delimiter and get the prefix
-        prefix = split_string(col, delimiter, **kwargs)[0]
-        
-        # Group the columns by the prefix
-        if prefix not in column_groups:
-            column_groups[prefix] = []
-        
-        column_groups[prefix].append(col)
-    
-    return column_groups

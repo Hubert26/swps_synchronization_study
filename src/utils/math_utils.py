@@ -5,7 +5,7 @@ Created on Wed Oct  2 18:20:45 2024
 @author: huber
 """
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, CubicSpline
 
 
 
@@ -133,15 +133,13 @@ def interpolate_missing_values(data_array: np.ndarray, method: str = 'linear') -
     
     return data_array
 #%%
-def interp_signals_uniform_time(signals: list[tuple[np.ndarray, np.ndarray]], ix_step: int = 1000, method: str = 'linear', fill_value='extrapolate') -> tuple[np.ndarray, list[np.ndarray]]:
+def interp_signals_uniform_time(signals: list[tuple[np.ndarray, np.ndarray]], ix_step: int = 1000) -> tuple[np.ndarray, list[np.ndarray]]:
     """
-    Interpolates multiple signals to a common uniform time axis within their overlapping time range.
+    Interpolates multiple signals to a common uniform time axis within their overlapping time range using CubicSpline.
     
     Args:
         signals (list[tuple[np.ndarray, np.ndarray]]): List of signals as tuples (x_data, y_data).
         ix_step (int, optional): Time step for the uniform axis in milliseconds. Default is 1000 ms.
-        method (str, optional): Interpolation method ('linear', 'quadratic', 'cubic', etc.). Default is 'linear'.
-        fill_value (str or float, optional): How to handle out-of-bounds values. Default is 'extrapolate'.
     
     Returns:
         tuple[np.ndarray, list[np.ndarray]]: A tuple containing the new uniform time axis and the list of interpolated signals.
@@ -153,12 +151,13 @@ def interp_signals_uniform_time(signals: list[tuple[np.ndarray, np.ndarray]], ix
     # Generate the new uniform time axis
     ix = np.arange(min_common_x, max_common_x, ix_step)
     
-    # Interpolate each signal to the uniform time axis
+    # Interpolate each signal to the uniform time axis using CubicSpline
     interpolated_signals = [
-        interp1d(x, y, kind=method, fill_value=fill_value)(ix) for x, y in signals
+        CubicSpline(x, y)(ix) for x, y in signals
     ]
     
     return ix, interpolated_signals
+
 
 #%%
 def fisher_transform(x: float) -> float:

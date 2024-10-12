@@ -86,8 +86,8 @@ class Data:
         if len(trimmed_x) != len(trimmed_y):
             raise ValueError("Mismatch between the lengths of trimmed x_data and y_data.")
     
-        # 3. Update the x_data values by normalizing them to start from first y_data
-        new_x_data = trimmed_x - trimmed_x[0] + trimmed_y[0]
+        # 3. Update the x_data values by normalizing them to start from 0
+        new_x_data = trimmed_x - trimmed_x[0]
     
         # 4. Update the internal x_data and y_data arrays using the update method
         self.update(new_x_data=new_x_data, new_y_data=trimmed_y)
@@ -210,7 +210,7 @@ class Metadata:
 
 #%%
 class Meas:
-    data: 'Data'
+    data: Data
     metadata: Metadata
     
     def __init__(self, x_data: np.ndarray, y_data: np.ndarray, meas_number: int, meas_type: str, gender: str, pair_number: int, shift: float, starttime: datetime, endtime: datetime):
@@ -256,88 +256,6 @@ class Meas:
             starttime=self.metadata.starttime,  # Keep the earliest start time
             endtime=other.metadata.endtime  # Use the latest end time
         )
-
-    def split(self) -> list['Meas']:
-        """
-        Splits a Meas object into multiple Meas objects wherever there's a 
-        mismatch between np.diff(x_data) and y_data, indicating a gap in the data.
-    
-        Returns:
-            A list of Meas objects, each representing a contiguous segment of data.
-        """
-        def recursive_split(x_data, y_data, starttime, threshold=1e-2):
-            # Calculate the differences between consecutive x_data elements
-            diff_x_data = np.diff(x_data)
-            
-            # Check if diff_x_data has more than one element
-            if len(diff_x_data) > 1:
-                # Find indices where x_data diff does not match the corresponding y_data values
-                mismatch_indices = np.where(np.abs(diff_x_data - y_data[1:]) > threshold)[0]
-                norm_x_data = x_data - x_data[0] + y_data[0]
-                
-                if len(mismatch_indices) == 0:
-                    # No gaps detected, return a single Meas object
-                    return [Meas(
-                        x_data=norm_x_data,
-                        y_data=y_data,
-                        meas_number=self.metadata.meas_number,
-                        meas_type=self.metadata.meas_type,
-                        gender=self.metadata.gender,
-                        pair_number=self.metadata.pair_number,
-                        shift=self.metadata.shift,
-                        starttime=starttime,
-                        endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
-                    )]
-            else:
-                # If there are not enough elements to create a mismatch, return the original object
-                return [Meas(
-                    x_data=norm_x_data,
-                    y_data=y_data,
-                    meas_number=self.metadata.meas_number,
-                    meas_type=self.metadata.meas_type,
-                    gender=self.metadata.gender,
-                    pair_number=self.metadata.pair_number,
-                    shift=self.metadata.shift,
-                    starttime=starttime,
-                    endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
-                )]
-    
-            # Find the first gap
-            first_mismatch = mismatch_indices[0] + 1 if len(mismatch_indices) > 0 else None
-    
-            # If no mismatches, return the original object
-            if first_mismatch is None or first_mismatch >= len(x_data):
-                return [Meas(
-                    x_data=x_data,
-                    y_data=y_data,
-                    meas_number=self.metadata.meas_number,
-                    meas_type=self.metadata.meas_type,
-                    gender=self.metadata.gender,
-                    pair_number=self.metadata.pair_number,
-                    shift=self.metadata.shift,
-                    starttime=starttime,
-                    endtime=starttime + timedelta(milliseconds=x_data[-1])
-                )]
-    
-            # Split x_data and y_data at the gap
-            y_data_1, y_data_2 = y_data[:first_mismatch], y_data[first_mismatch:]
-            x_data_1, x_data_2 = x_data[:first_mismatch], x_data[first_mismatch:]
-    
-            # Normalize the x_data arrays so they start from first element of y_data
-            x_data_1 = x_data_1 - x_data_1[0] + y_data_1[0]
-    
-            # Calculate the new start time for the second segment
-            # Rounding off to the nearest millisecond without floating point issues
-            starttime_2 = starttime + timedelta(milliseconds=(norm_x_data[first_mismatch] - y_data[first_mismatch]))
-    
-            # Recursively split the two segments
-            return (
-                recursive_split(x_data_1, y_data_1, starttime) +
-                recursive_split(x_data_2, y_data_2, starttime_2)
-            )
-    
-        # Initiate recursive splitting
-        return recursive_split(self.data.x_data, self.data.y_data, self.metadata.starttime)
 
     def update_data(self, new_x_data: np.ndarray = None, new_y_data: np.ndarray = None):
         """Updates the x_data and/or y_data arrays."""
@@ -394,13 +312,14 @@ class Meas:
         """
         # Dodaj przesunięcie do starttime
         new_starttime = self.metadata.starttime + timedelta(milliseconds=shift_ms)
+        new_endtime = self.metadata.endtime + timedelta(milliseconds=shift_ms)
     
         # Konwertuj milisekundy na sekundy do zapisu w shift
         shift_s = shift_ms / 1000.0
         new_shift = self.metadata.shift + shift_s
     
         # Zaktualizuj obiekt Meas z nowym starttime i shift
-        self.update(new_starttime=new_starttime, new_shift=new_shift)    
+        self.update(new_starttime=new_starttime, new_endtime=new_endtime, new_shift=new_shift)    
           
     def __repr__(self):
         return f"Meas(data={self.data!r}, metadata={self.metadata!r})"
@@ -409,6 +328,106 @@ class Meas:
         return f"{self.metadata.meas_number}{self.metadata.meas_type}{self.metadata.gender}{self.metadata.pair_number}_{self.metadata.shift}"
 
 #%%
+def split_nn_rr_meas(meas: 'Meas', threshold: float = 1e-2) -> list['Meas']:
+    """
+    Splits a Meas object (specifically for NN or RR intervals) into multiple Meas objects 
+    wherever there's a mismatch between np.diff(x_data) and y_data, indicating a gap in the data.
+
+    Args:
+        meas (Meas): The Meas object containing NN or RR interval data.
+        threshold (float, optional): The tolerance level for detecting gaps based on differences 
+                                     in x_data and y_data. Default is 1e-2.
+    
+    Returns:
+        list[Meas]: A list of Meas objects, each representing a contiguous segment of the input data.
+    """
+
+    def recursive_split(x_data, y_data, starttime, threshold):
+        """
+        Helper function that performs the recursive splitting of the data.
+
+        Args:
+            x_data (ndarray): The x-axis data (typically time) of the measurement.
+            y_data (ndarray): The y-axis data (typically the measured intervals).
+            starttime (datetime): The start time for the data segment.
+            threshold (float): The tolerance level for detecting gaps.
+
+        Returns:
+            list[Meas]: A list of Meas objects for each detected segment.
+        """
+        # Base case: if the segment is too small to split
+        if len(x_data) <= 1:
+            norm_x_data = x_data - x_data[0] + y_data[0]
+            return [Meas(
+                x_data=norm_x_data,
+                y_data=y_data,
+                meas_number=meas.metadata.meas_number,
+                meas_type=meas.metadata.meas_type,
+                gender=meas.metadata.gender,
+                pair_number=meas.metadata.pair_number,
+                shift=meas.metadata.shift,
+                starttime=starttime,
+                endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
+            )]
+
+        # Calculate the differences between consecutive x_data elements
+        diff_x_data = np.diff(x_data)
+
+        # Identify indices where the diff in x_data does not match y_data
+        mismatch_indices = np.where(np.abs(diff_x_data - y_data[1:]) > threshold)[0]
+
+        # Normalize x_data
+        norm_x_data = x_data - x_data[0] + y_data[0]
+
+        if len(mismatch_indices) == 0:
+            # No gaps detected, return a single Meas object
+            return [Meas(
+                x_data=norm_x_data,
+                y_data=y_data,
+                meas_number=meas.metadata.meas_number,
+                meas_type=meas.metadata.meas_type,
+                gender=meas.metadata.gender,
+                pair_number=meas.metadata.pair_number,
+                shift=meas.metadata.shift,
+                starttime=starttime,
+                endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
+            )]
+
+        # First mismatch (gap detected)
+        first_mismatch = mismatch_indices[0] + 1
+
+        # Split x_data and y_data into two parts at the gap
+        y_data_1, y_data_2 = y_data[:first_mismatch], y_data[first_mismatch:]
+        x_data_1, x_data_2 = x_data[:first_mismatch], x_data[first_mismatch:]
+
+        # If the second part is empty, return only the first part
+        if len(x_data_2) == 0 or len(y_data_2) == 0:
+            return [Meas(
+                x_data=x_data_1,
+                y_data=y_data_1,
+                meas_number=meas.metadata.meas_number,
+                meas_type=meas.metadata.meas_type,
+                gender=meas.metadata.gender,
+                pair_number=meas.metadata.pair_number,
+                shift=meas.metadata.shift,
+                starttime=starttime,
+                endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
+            )]
+
+        # Normalize the first part of x_data
+        x_data_1 = x_data_1 - x_data_1[0] + y_data_1[0]
+
+        # Calculate the new start time for the second part
+        starttime_2 = starttime + timedelta(milliseconds=(norm_x_data[first_mismatch] - y_data[first_mismatch]))
+
+        # Recursively split both parts
+        return (
+            recursive_split(x_data_1, y_data_1, starttime, threshold) +
+            recursive_split(x_data_2, y_data_2, starttime_2, threshold)
+        )
+
+    # Start the recursive splitting process
+    return recursive_split(meas.data.x_data, meas.data.y_data, meas.metadata.starttime, threshold)
 
 
 

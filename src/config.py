@@ -18,13 +18,11 @@ LOGS_DIR = ROOT_DIR / 'logs'
 DATA_DIR = ROOT_DIR / "data"
 RESULTS_DIR = ROOT_DIR / "results"
 PLOTS_DIR = RESULTS_DIR / "plots"
-HISTOGRAM_ORYGINAL_PLOTS_DIR = PLOTS_DIR / 'oryginal_meas' / 'histograms'
-SCATTER_ORYGINAL_PLOTS_DIR = PLOTS_DIR / 'oryginal_meas' / 'scatters'
 ANALYSIS_DATA_DIR = RESULTS_DIR / "analysis_data"
 
 
 # Create directories if they don't exist
-for directory in [LOGS_DIR, DATA_DIR, RESULTS_DIR, PLOTS_DIR, ANALYSIS_DATA_DIR, HISTOGRAM_ORYGINAL_PLOTS_DIR, SCATTER_ORYGINAL_PLOTS_DIR]:
+for directory in [LOGS_DIR, DATA_DIR, RESULTS_DIR, PLOTS_DIR, ANALYSIS_DATA_DIR]:
     create_directory(directory)
     
 LOGGING_LVL = 'INFO'  # Can be changed to 'DEBUG', 'ERROR', 'INFO', 'WARNING' , etc.
@@ -58,6 +56,7 @@ COOPERATION_1_TIME_INTERVALS = {
     (68000, 88000): "1_z1_4_m",
     (88000, 108000): "1_z1_5_k",
     (108000, 128000): "1_z1_6_m",
+    (8000, 128000): "1_z1",
 #   (128000, 136000): "1_z1_odp_idle",#nie
 #   (226000, 226000): "1_z1_odp",#nie
 #   (246000, 286000): "1_pause",#nie
@@ -68,6 +67,7 @@ COOPERATION_1_TIME_INTERVALS = {
     (354000, 374000): "1_z2_4_k",
     (374000, 394000): "1_z2_5_m",
     (394000, 414000): "1_z2_6_k",
+    (294000, 414000): "1_z2",
 #   (414000, 422000): "1_z2_odp_idle",#nie
 #   (422000, 512000): "1_z2_odp",#nie
 #   (512000, 547000): "1_baseline2_idle",#nie
@@ -82,6 +82,7 @@ COOPERATION_2_TIME_INTERVALS = {
     (68000, 88000): "2_z1_4_m",
     (88000, 108000): "2_z1_5_k",
     (108000, 128000): "2_z1_6_m",
+    (8000, 128000): "2_z1",
 #   (128000, 136000): "2_z1_odp_idle",
 #   (226000, 226000): "2_z1_odp",
 #   (246000, 286000): "2_pause",
@@ -92,6 +93,7 @@ COOPERATION_2_TIME_INTERVALS = {
     (354000, 374000): "2_z2_4_k",
     (374000, 394000): "2_z2_5_m",
     (394000, 414000): "2_z2_6_k",
+    (294000, 414000): "2_z2",
 #   (414000, 422000): "2_z2_odp_idle",
 #   (422000, 512000): "2_z2_odp",
 #   (512000, 547000): "2_baseline2_idle",
@@ -109,11 +111,15 @@ BASELINE_2_TIME_INTERVALS = {
 }
 
 RELAXATION_1_TIME_INTERVALS = {
-    (0, float('inf')): "1_relaxation"
+    (0, 237000): "1_relaxation_before",
+    (320000, 740000): "1_relaxation",
+    (793000, 1033000): "1_relaxation_after"
 }
 
 RELAXATION_2_TIME_INTERVALS = {
-    (0, float('inf')): "2_relaxation"
+    (0, 237000): "2_relaxation_before",
+    (320000, 740000): "2_relaxation",
+    (793000, 1033000): "2_relaxation_after"
 }
 
 # Define meas_types with measurement type and regex pattern

@@ -17,7 +17,7 @@ import copy
 from datetime import datetime, timedelta
 from collections import defaultdict
 from scipy.interpolate import interp1d
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, combine_pvalues, chi2
 
 from IPython.display import display
 import warnings
@@ -31,7 +31,7 @@ from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plo
 from utils.file_utils import read_text_file, extract_file_name
 #from utils.matplotlib_utils import save_fig_matplotlib, create_subplots_matplotlib, create_multi_series_bar_chart_matplotlib
 from utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
-from utils.math_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array
+from utils.math_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, fisher_transform
 
 
 #%%
@@ -276,6 +276,162 @@ def density_plot(meas_list: list['Meas'], sd_threshold: float = 3, title: str = 
     return fig, title
 
 #%%
+def meas_plot_from(meas_list: list[Meas], folder_name: str):
+    """
+    Generates and saves histogram and scatter plots for original signals 
+    from a list of Meas objects and saves them in the specified folder.
+
+    Parameters:
+    -----------
+    meas_list : list[Meas]
+        A list of Meas objects to be plotted.
+
+    folder_name : str
+        The name of the folder where plots will be saved.
+        
+    Returns:
+    --------
+    None
+    """
+    plot_list = copy.deepcopy(meas_list)
+    
+    # Group measurements by their type and number
+    grouped_meas = group_meas(plot_list, ["meas_type", "meas_number"])
+
+    for key, group in grouped_meas.items():
+        merged_meas = merge_grouped(group)
+
+        meas_type, meas_number = key
+        folder_path = PLOTS_DIR / meas_type / str(meas_number) / folder_name
+
+        # Create directories for saving plots
+        create_directory(folder_path / 'HISTOGRAM')
+        create_directory(folder_path / 'SCATTER')
+
+        for meas in merged_meas:
+            # Generate file name based on the measurement and its data range
+            file_name = str(meas) + str(meas.data.range()[0]) + ".html"
+
+            # Create and save histogram plot
+            fig_hist, title_hist = density_plot([meas])
+            save_html_plotly(fig_hist, folder_path / 'HISTOGRAM' / file_name)
+
+            # Create and save scatter plot
+            fig_scatter, title_scatter = scatter_plot([meas])
+            save_html_plotly(fig_scatter, folder_path / 'SCATTER' / file_name)
+
+#%%
+def plot_histogram_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path):
+    """
+    Plots and saves a density histogram for a pair of Meas objects.
+
+    Args:
+        meas_pair (tuple): A tuple containing two Meas objects (meas1, meas2).
+        folder_path (Path): Path to the directory where the histogram will be saved.
+    
+    Returns:
+        None
+    """
+    meas1, meas2 = meas_pair
+    
+    # Align signals if necessary (assuming time_align_pair is a helper function)
+    time_align_pair(meas1, meas2)
+    
+    # Generate the file name for saving the plot
+    file_name = (
+        f"{str(meas1)};{str(meas2)}_"
+        f"{min(meas1.data.range()[0][0], meas2.data.range()[0][0])}-"
+        f"{max(meas1.data.range()[0][1], meas2.data.range()[0][1])}.html"
+    )
+    
+    # Create directory for histogram plots if it doesn't exist
+    create_directory(folder_path / 'HISTOGRAM')
+    
+    # Generate the histogram figure
+    fig_hist, title_hist = density_plot([meas1, meas2])
+    
+    # Save the plot as an HTML file
+    save_html_plotly(fig_hist, folder_path / 'HISTOGRAM' / file_name)
+
+#%%
+def plot_scatter_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path):
+    """
+    Plots and saves a scatter plot for a pair of Meas objects.
+
+    Args:
+        meas_pair (tuple): A tuple containing two Meas objects (meas1, meas2).
+        folder_path (Path): Path to the directory where the scatter plot will be saved.
+    
+    Returns:
+        None
+    """
+    meas1, meas2 = meas_pair
+    
+    # Align signals if necessary (assuming time_align_pair is a helper function)
+    time_align_pair(meas1, meas2)
+    
+    # Generate the file name for saving the plot
+    file_name = (
+        f"{str(meas1)};{str(meas2)}_"
+        f"{min(meas1.data.range()[0][0], meas2.data.range()[0][0])}-"
+        f"{max(meas1.data.range()[0][1], meas2.data.range()[0][1])}.html"
+    )
+     
+    # Create directory for scatter plots if it doesn't exist
+    create_directory(folder_path / 'SCATTER')
+    
+    # Generate the scatter plot figure
+    fig_scatter, title_scatter = scatter_plot([meas1, meas2])
+    
+    # Save the plot as an HTML file
+    save_html_plotly(fig_scatter, folder_path / 'SCATTER' / file_name)
+    
+#%%
+def pair_plots_from(meas_list: list[Meas], folder_name: str):
+    """
+    Groups Meas objects, filters and merges them, then creates and saves histogram and scatter plots for each pair.
+
+    Parameters:
+    -----------
+    meas_list : list[Meas]
+        A list of Meas objects to process and plot.
+
+    folder_name : str
+        The name of the folder where the plots will be saved.
+
+    Returns:
+    --------
+    None
+    """
+    
+    plot_list = copy.deepcopy(meas_list)
+    
+    # Group measurements by meas_type and meas_number
+    grouped_meas = group_meas(plot_list, ["meas_type", "meas_number"])
+
+    # Iterate through each group of measurements
+    for key, group in grouped_meas.items():
+        # Filter and merge measurements
+        filtered_meas = filter_meas(group)
+        merged_meas = merge_grouped(group)
+
+        meas_type, meas_number = key
+        folder_path = PLOTS_DIR / meas_type / str(meas_number) / folder_name
+        
+        # Create directory if it does not exist
+        folder_path.mkdir(parents=True, exist_ok=True)
+
+        # Find pairs of measurements
+        pairs = find_pairs(merged_meas)
+
+        # Generate and save plots for each pair
+        for pair in pairs:
+            plot_meas1, plot_meas2 = copy.deepcopy(pair)
+            plot_histogram_pair((plot_meas1, plot_meas2), folder_path)
+            plot_scatter_pair((plot_meas1, plot_meas2), folder_path)
+
+    
+#%%
 def find_meas(meas_list: list['Meas'], **criteria) -> list['Meas']:
     """
     Find Meas objects in meas_list that match specified criteria.
@@ -433,38 +589,6 @@ def merge_grouped(meas_list: list['Meas']) -> list['Meas']:
     return merged_meas_list
 
 #%%
-def find_pairs(meas_list: list['Meas']) -> list[tuple['Meas', 'Meas']]:
-    """
-    Finds pairs of Meas objects with different genders but identical
-    meas_number, meas_type, pair_number, and shift attributes.
-
-    Args:
-        meas_list (list[Meas]): List of Meas objects to search for pairs.
-
-    Returns:
-        list[tuple[Meas, Meas]]: List of tuples, where each tuple contains a pair of Meas objects with different genders.
-    """
-    
-    assert all(isinstance(meas, Meas) for meas in meas_list), "meas_list contains non-Meas objects."
-    
-    # Group Meas objects by the relevant metadata fields except for gender
-    grouped_meas = group_meas(meas_list, ["meas_number", "meas_type", "pair_number", "shift"])
-    
-    pairs = []
-    
-    # Iterate through the groups to find pairs of different genders
-    for group in grouped_meas.values():
-        males = [meas for meas in group if meas.metadata.gender == 'M']
-        females = [meas for meas in group if meas.metadata.gender == 'F']
-        
-        # Find pairs of male and female Meas objects
-        for male in males:
-            for female in females:
-                pairs.append((male, female))
-    
-    return pairs
-
-#%%
 def calculate_pair_time_difference(meas1: 'Meas', meas2: 'Meas', based_on: str = 'starttime') -> float:
     """
     Calculate the time difference in milliseconds between two signals based on their start or end times.
@@ -529,23 +653,35 @@ def time_align_pair(meas1: 'Meas', meas2: 'Meas') -> None:
 
 
 #%%
-def filter_meas(meas_list: list['Meas'], sd_threshold: float = 3, threshold_factor: float = 0.2, interp_method: str = 'linear') -> list['Meas']:
+def filter_rr_meas(meas_list: list['Meas'], sd_threshold: float = 3, threshold_factor: float = 0.2, interp_method: str = 'linear') -> list['Meas']:
     """
     Filters and processes a list of Meas objects by removing outliers and interpolating missing values.
     The function operates on a deep copy of the input list, leaving the original data unchanged.
-    After splitting each Meas object into sub-Meas, the function filters and interpolates the data, and
-    finally merges the sub-Meas objects back together.
+    Each Meas object is processed to filter outliers based on standard deviation and relative mean,
+    and to interpolate any missing values in the data.
 
     Parameters:
-    meas_list (list): A list of Meas objects to process.
-    sd_threshold (float): The number of standard deviations used to define outliers for the first filtering step. Default is 3.
-    threshold_factor (float): The percentage threshold used in the second filtering step, where values are compared to the relative mean of neighbors. Default is 0.2 (20%).
-    interp_method (str): The method used to interpolate missing (NaN) values. Default is 'linear'.
-    
+    -----------
+    meas_list : list[Meas]
+        A list of Meas objects to process.
+
+    sd_threshold : float
+        The number of standard deviations used to define outliers for the initial filtering step. Default is 3.
+
+    threshold_factor : float
+        The percentage threshold used in the second filtering step, where values are compared to the relative mean of neighboring values. 
+        Default is 0.2 (20%).
+
+    interp_method : str
+        The method used to interpolate missing (NaN) values. Default is 'linear'.
+
     Returns:
-    list[Meas]: A list of processed and merged Meas objects, with filtered and interpolated data.
+    --------
+    list[Meas]
+        A list of processed and merged Meas objects, with filtered and interpolated data.
     """
     
+    # Ensure all items in meas_list are instances of the Meas class
     assert all(isinstance(meas, Meas) for meas in meas_list), "meas_list contains non-Meas objects."
     
     # Create a deep copy of the list to avoid modifying the original objects
@@ -553,45 +689,31 @@ def filter_meas(meas_list: list['Meas'], sd_threshold: float = 3, threshold_fact
     filtered_meas_list = []
     
     for meas in meas_list_copy:
-        # List to store sub-Meas objects for filtering and merging
-        sub_meas_list_to_merge = []
-        
-        # Step 1: Split Meas into smaller sub-Meas objects based on x_data continuity
-        splitted_meas = meas.split()
-        
-        if len(splitted_meas) > 5:
-            raise ValueError("The lists (splitted_meas) has more than 5 elements.")
-        
-        assert all(isinstance(meas, Meas) for meas in splitted_meas), "meas_list contains non-Meas objects."
-        for sub_meas in splitted_meas:
-            # Step 2: Filter y_data to remove outliers based on standard deviation
-            filtered_y_data = filter_values_by_sd(sub_meas.data.y_data, sd_threshold)
-    
-            # Step 3: Further filter y_data based on the relative mean of neighboring values
-            try:
-                filtered_y_data = filter_values_by_relative_mean(filtered_y_data, threshold_factor)
-            except ValueError as e:
-                logger.info(f"Skipping relative mean filter for {sub_meas} due to: {e}")
+        # Step 1: Filter y_data based on standard deviation
+        filtered_y_data = filter_values_by_sd(meas.data.y_data, sd_threshold)
 
-    
-            # Step 4: Interpolate missing (NaN) values in the filtered data
-            filtered_y_data = interpolate_missing_values(filtered_y_data, method=interp_method)
-            new_x_data = np.cumsum(filtered_y_data)
-            
-            # Step 5: Update sub-Meas object with new x_data (cumulative sum of y_data) and y_data
-            sub_meas.update(new_x_data=new_x_data,
-                            new_y_data=filtered_y_data,
-                            new_endtime=sub_meas.metadata.starttime + timedelta(milliseconds=new_x_data[-1]))
-            
-            # Add filtered sub-Meas to the list for later merging
-            sub_meas_list_to_merge.append(sub_meas)
+        # Step 2: Further filter y_data based on the relative mean of neighboring values
+        try:
+            filtered_y_data = filter_values_by_relative_mean(filtered_y_data, threshold_factor)
+        except ValueError as e:
+            logger.info(f"Skipping relative mean filter for {meas} due to: {e}")
+
+        # Step 3: Interpolate missing (NaN) values in the filtered data
+        filtered_y_data = interpolate_missing_values(filtered_y_data, method=interp_method)
         
-        # Step 6: Merge all filtered sub-Meas objects into one Meas object
-        merged_meas = merge_meas(sub_meas_list_to_merge)
+        # Step 4: Calculate new x_data as the cumulative sum of the filtered y_data
+        new_x_data = np.cumsum(filtered_y_data)
         
-        filtered_meas_list.append(merged_meas)
+        # Step 5: Update the Meas object with new x_data, filtered y_data, and updated end time
+        meas.update(new_x_data=new_x_data,
+                    new_y_data=filtered_y_data,
+                    new_endtime=meas.metadata.starttime + timedelta(milliseconds=new_x_data[-1]))
+                
+        # Add the processed Meas object to the filtered list
+        filtered_meas_list.append(meas)
         
     return filtered_meas_list
+
 
 #%%
 def trim_meas(meas: Meas, start_ms: float, end_ms: float, starttime: datetime = None) -> Meas:
@@ -677,15 +799,13 @@ def trim_to_common_range(meas_pair: tuple['Meas', 'Meas']) -> tuple['Meas', 'Mea
     return trimmed_meas1, trimmed_meas2
 
 #%%
-def interp_meas_pair_uniform_time(meas_pair: tuple['Meas', 'Meas'], ix_step: int = 1000, method: str = 'linear', fill_value='extrapolate') -> tuple['Meas', 'Meas']:
+def interp_meas_pair_uniform_time(meas_pair: tuple['Meas', 'Meas'], ix_step: int = 1000) -> tuple['Meas', 'Meas']:
     """
     Interpolates a pair of Meas objects to a common uniform time axis within their overlapping x_data range.
 
     Args:
         meas_pair (tuple[Meas, Meas]): A tuple containing two Meas objects to interpolate.
         ix_step (int, optional): Time step for the uniform axis in milliseconds. Default is 1000 ms.
-        method (str, optional): Interpolation method ('linear', 'quadratic', 'cubic', etc.). Default is 'linear'.
-        fill_value (str or float, optional): How to handle out-of-bounds values. Default is 'extrapolate'.
     
     Returns:
         tuple[Meas, Meas]: A tuple containing the updated Meas objects with interpolated x_data and y_data.
@@ -705,7 +825,7 @@ def interp_meas_pair_uniform_time(meas_pair: tuple['Meas', 'Meas'], ix_step: int
     ]
 
     # Interpolate the signals to a uniform time axis
-    ix, interpolated_signals = interp_signals_uniform_time(signals, ix_step=ix_step, method=method, fill_value=fill_value)
+    ix, interpolated_signals = interp_signals_uniform_time(signals, ix_step=ix_step)
 
     # Update the Meas objects with interpolated x_data and y_data
     meas1.update_data(new_x_data=ix, new_y_data=interpolated_signals[0])
@@ -716,43 +836,36 @@ def interp_meas_pair_uniform_time(meas_pair: tuple['Meas', 'Meas'], ix_step: int
 
 
 #%%
-def calc_corr_weighted(meas_pair: tuple['Meas', 'Meas']) -> tuple[dict, tuple['Meas', 'Meas']]:
+def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple[dict, tuple['Meas', 'Meas']]:
     """
-    Calculates the weighted Pearson correlation coefficient and p-value for each pair of 
-    split time series from two Meas objects. Trims and validates each split before calculating correlation.
-    Collects all interpolated Meas objects, merges them, and returns the weighted average correlation.
+    Calculates the weighted Pearson correlation coefficient and combines p-values for each pair of 
+    Meas objects from two lists, based on their interpolated signals. Handles trimming, 
+    validating, interpolating, and merging of the signals.
 
     Parameters:
     -----------
-    meas_pair : tuple[Meas, Meas]
-        A tuple containing two Meas objects to be compared.
+    meas_pair_lists : tuple[list[Meas], list[Meas]]
+        A tuple containing two lists of Meas objects, where each list corresponds to one person in the pair.
+        Each list will be iterated to compute correlations between all possible combinations of the Meas objects.
 
     Returns:
     --------
     avg_corr_result : dict
         A dictionary containing the weighted average correlation coefficient (`corr`), 
-        p-value (`p_val`), and other relevant series information.
+        combined p-value (`p_val`), the string representations of the Meas objects (`meas1`, `meas2`), 
+        and their shift difference (`shift_diff`).
 
     merged_meas_pair : tuple[Meas, Meas]
         The merged and interpolated Meas objects after trimming, interpolation, and merging on a uniform time grid.
+
+    Notes:
+    ------
+    - The weighted average correlation is calculated based on the length of the interpolated signal as weight.
+    - P-values are combined using Fisher’s method via `combine_pvalues`.
+    - If no valid correlations are computed, the function will return (None, None).
     """
-    meas1, meas2 = meas_pair
+    meas1_list, meas2_list = meas_pair_lists
     
-    if str(meas1) == "1RelaxationM14_0.0" or str(meas2) == "1RelaxationM14_0.0":
-        logger.info("Jeden z Meas to 1RelaxationM14_0.0")
-
-    # Validate the meas pair before proceeding
-    if not (validate_meas_data(meas1, 3) and validate_meas_data(meas2, 3)):
-        raise DataValidationError("Input is incorrect")
-
-    # Split the signals based on gaps
-    split_meas1 = meas1.split()
-    split_meas2 = meas2.split()
-    
-    n = 4
-    if len(split_meas1) > n or len(split_meas2) > n:
-        raise ValueError("One of the lists (split_meas1 or split_meas2) has more than {n} elements.")
-
     corr_list = []
     p_val_list = []
     weights = []
@@ -760,50 +873,55 @@ def calc_corr_weighted(meas_pair: tuple['Meas', 'Meas']) -> tuple[dict, tuple['M
     interp_meas1_list = []
     interp_meas2_list = []
 
-    # Iterate over splits and calculate correlation
-    for split1 in split_meas1:
-        for split2 in split_meas2:
-            # Validate the individual splits
-            if not (validate_meas_data(split1, 3) and validate_meas_data(split2, 3)):
-                logger.info(f"Validation failed in calc_corr_weighted for splitted signals {split1} and {split2}. Skipping invalid split pair.")
+    # Iterate over each Meas object from both lists to calculate pairwise correlation
+    for meas1 in meas1_list:
+        for meas2 in meas2_list:
+            # Validate the data in both Meas objects before proceeding
+            if not (validate_meas_data(meas1, 3) and validate_meas_data(meas2, 3)):
+                logger.info(f"Validation failed in calc_corr_weighted for {meas1} and {meas2}. Skipping invalid pair.")
                 continue
+            
             try:
-                # Interpolate both series to a uniform time grid
-                interp_meas1, interp_meas2 = interp_meas_pair_uniform_time((split1, split2), ix_step=250)
+                # Interpolate both Meas objects onto a uniform time grid for correlation
+                interp_meas1, interp_meas2 = interp_meas_pair_uniform_time((meas1, meas2), ix_step=250)
             except ValueError as e:
-                logger.info(f"Skipping interpolation due to error {e}.")
-                continue
-                
-            # Skip if interpolation failed
-            if interp_meas1 is None or interp_meas2 is None:
-                logger.info(f"Skipping interpolation due to failure. For splits: {split1}, {split2}")
+                logger.info(f"Skipping interpolation due to error: {e}.")
                 continue
 
-            # Collect the interpolated Meas objects
+            # If interpolation failed, skip to the next pair
+            if interp_meas1 is None or interp_meas2 is None:
+                logger.info(f"Skipping interpolation due to failure. For: {meas1}, {meas2}")
+                continue
+
+            # Collect the successfully interpolated Meas objects
             interp_meas1_list.append(interp_meas1)
             interp_meas2_list.append(interp_meas2)
 
-            # Calculate the Pearson correlation coefficient and p-value
+            # Calculate the Pearson correlation coefficient and p-value between the interpolated signals
             corr, p_val = pearsonr(interp_meas1.data.y_data, interp_meas2.data.y_data)
-
+            
+            # Use fisfer transformation on pearson correlation result
+            corr = fisher_transform(corr)
+            
             # Calculate the length of the interpolated signal as weight
             weight = len(interp_meas1.data.y_data)
 
-            # Append the results to the lists
+            # Append results to their respective lists
             corr_list.append(corr)
             p_val_list.append(p_val)
             weights.append(weight)
 
+    # If no valid correlations were computed, return None
     if not corr_list:
-        logger.info(f"No valid correlations were computed for {meas1} and {meas2}")
+        logger.warning(f"No valid correlations were computed for {meas1_list} and {meas2_list}")
         return None, None
-    
-    try: 
-        # Merge the collected interpolated Meas objects
+
+    try:
+        # Merge the interpolated Meas objects from both lists
         merged_meas1 = merge_meas(interp_meas1_list)
         merged_meas2 = merge_meas(interp_meas2_list)
     except ValueError as e:
-        # Log the information about each Meas object in the list
+        # Log details of the Meas objects to assist debugging in case of a merge error
         for meas in interp_meas1_list:
             logger.warning(f"Meas: {str(meas)}, Start time: {meas.metadata.starttime}, End time: {meas.metadata.endtime}")
         for meas in interp_meas2_list:
@@ -811,14 +929,19 @@ def calc_corr_weighted(meas_pair: tuple['Meas', 'Meas']) -> tuple[dict, tuple['M
         logger.info(f"Error occurred during merging: {e}")
         raise e
 
-    # Calculate weighted average correlation and p-value
+    # Calculate the weighted average of correlation coefficients
     avg_corr = np.average(corr_list, weights=weights)
-    avg_p_val = np.average(p_val_list, weights=weights)
+    
+    # Combine p-values using Fisher's method, then convert the chi-square statistic to a p-value
+    fisher_stat, _ = combine_pvalues(p_val_list, method='fisher')
 
-    # Prepare the result
+    # Convert Fisher's method chi-square statistic to p-value
+    combined_p_val = 1 - chi2.cdf(fisher_stat, 2 * len(p_val_list))  # Degrees of freedom = 2 * number of p-values
+
+    # Prepare the result dictionary with correlation, combined p-value, and other metadata
     avg_corr_result = {
         'corr': avg_corr,
-        'p_val': avg_p_val,
+        'p_val': combined_p_val,  # Combined p-value
         'meas1': str(meas1),
         'meas2': str(meas2),
         'shift_diff': meas1.metadata.shift - meas2.metadata.shift
@@ -827,6 +950,220 @@ def calc_corr_weighted(meas_pair: tuple['Meas', 'Meas']) -> tuple[dict, tuple['M
     return avg_corr_result, (merged_meas1, merged_meas2)
 
 #%%
+def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, list[tuple[Meas, Meas]]]:
+    """
+    Calculates the best weighted correlation between pairs of measurements, including shifted versions, 
+    for various time intervals. Also identifies the best pair with the maximum correlation and smallest 
+    shift difference. Returns a DataFrame of correlation results and a list of best interpolated measurement pairs.
+
+    Parameters:
+    -----------
+    filtered_meas_list : list[Meas]
+        A list of filtered Meas objects to group, correlate, and evaluate.
+
+    Returns:
+    --------
+    final_corr_results_df : pd.DataFrame
+        A DataFrame containing the correlation results for each measurement pair.
+    
+    final_interp_pairs_list : list[tuple[Meas, Meas]]
+        A list of tuples, where each tuple contains two interpolated Meas objects 
+        representing the best-correlated pair for each time interval.
+    """
+    
+    final_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_state'])
+    final_interp_pairs_list = []
+    
+    grouped_meas = group_meas(meas_list, ["meas_number", "meas_type", "pair_number"])
+
+    # Iterate over each group of measurements
+    for key, group in grouped_meas.items():      
+        meas_number, meas_type, pair_number = key
+        
+        person_meas1 = [meas for meas in group if meas.metadata.gender == 'M']
+        person_meas2 = [meas for meas in group if meas.metadata.gender == 'F']
+        
+        # Get time intervals for the given measurement number and type
+        selected_intervals = get_time_intervals(meas_number, meas_type)
+        
+        # Find the oldest starttime among all measurements in the pair
+        oldest_starttime = min(meas.metadata.starttime for meas in group)
+        
+        # Create shifted versions of the measurement pair
+        shifted_meas1_list = []
+        shifted_meas2_list = []
+        for shift_ms in range(1000, 5001, 1000):
+            # Deep copy first, then shift the copies
+            shifted_meas1 = [copy.deepcopy(meas) for meas in person_meas1]
+            shifted_meas2 = [copy.deepcopy(meas) for meas in person_meas2]
+        
+            # Apply shift on each copied meas object
+            for meas in shifted_meas1:
+                meas.shift_right(shift_ms)
+            for meas in shifted_meas2:
+                meas.shift_right(shift_ms)
+            
+            # Add the shifted versions to the final lists
+            shifted_meas1_list.extend(shifted_meas1)
+            shifted_meas2_list.extend(shifted_meas2)
+        
+        best_corr_results_list = []
+        best_interp_pairs_list = []
+        
+        # Iterate through the selected time intervals
+        for (start_ms, end_ms), meas_state in selected_intervals.items():
+            # Calculate the time bounds for selecting based on oldest_starttime
+            lower_bound = oldest_starttime + pd.Timedelta(milliseconds=start_ms)
+            upper_bound = oldest_starttime + pd.Timedelta(milliseconds=end_ms)
+            
+            # Select measurements based on starttime and endtime
+            selected_person_meas1 = [meas for meas in person_meas1 if lower_bound <= meas.metadata.endtime and meas.metadata.starttime <= upper_bound]
+            selected_person_meas2 = [meas for meas in person_meas2 if lower_bound <= meas.metadata.endtime and meas.metadata.starttime <= upper_bound]  
+            
+            selected_shifted_meas1_list = [meas for meas in shifted_meas1_list if lower_bound <= meas.metadata.endtime and meas.metadata.starttime <= upper_bound]
+            selected_shifted_meas2_list = [meas for meas in shifted_meas2_list if lower_bound <= meas.metadata.endtime and meas.metadata.starttime <= upper_bound]
+            
+            # Trim measurements to the given interval
+            trimmed_meas1_list = []
+            trimmed_meas2_list = []
+            trimmed_shifted_meas1_list = []
+            trimmed_shifted_meas2_list = []
+            
+            for loop_meas1, loop_meas2 in zip(selected_person_meas1, selected_person_meas2):
+                try:
+                    trimmed_meas1_list.append(trim_meas(loop_meas1, start_ms, end_ms, starttime=oldest_starttime))
+                    trimmed_meas2_list.append(trim_meas(loop_meas2, start_ms, end_ms, starttime=oldest_starttime))
+                except ValueError as e:
+                    logger.warning(f"Trimming meas to interval faild. Skipping pair due to invalid time range: {e}")
+                    continue
+                
+            for loop_meas1, loop_meas2 in zip(selected_shifted_meas1_list, selected_shifted_meas2_list):
+                try:
+                    trimmed_shifted_meas1_list.append(trim_meas(loop_meas1, start_ms, end_ms, starttime=oldest_starttime))
+                    trimmed_shifted_meas2_list.append(trim_meas(loop_meas2, start_ms, end_ms, starttime=oldest_starttime))
+                except ValueError as e:
+                    logger.warning(f"Trimming shifted meas to interval faild. Skipping pair due to invalid time range: {e}")
+                    continue
+            
+            # Group trimmed measurements by their shift value
+            trimmed_shifted_gruped_meas1 = group_meas(trimmed_shifted_meas1_list, ["shift"])
+            trimmed_shifted_gruped_meas2 = group_meas(trimmed_shifted_meas2_list, ["shift"])
+            
+            # Initialize lists to store correlation results
+            corr_res_list = []
+            interp_pair_list = []
+            
+            # Calculate shift1=0 with shift2=0
+            corr_res, interp_pair = calc_corr_weighted((selected_person_meas1, selected_person_meas2))
+            if corr_res is not None and interp_pair is not None:
+                corr_res_list.append(pd.DataFrame([corr_res]))
+                interp_pair_list.append(interp_pair)
+                
+            # Calculate shift1=0 with every shift2
+                for shift2, meas2_group in trimmed_shifted_gruped_meas2.items():
+                    corr_res, interp_pair = calc_corr_weighted((selected_person_meas1, meas2_group))
+                    if corr_res is not None and interp_pair is not None:
+                        corr_res_list.append(pd.DataFrame([corr_res]))
+                        interp_pair_list.append(interp_pair)
+            
+            # Calculate shift2=0 with every shift1
+                for shift1, meas1_group in trimmed_shifted_gruped_meas1.items():
+                    corr_res, interp_pair = calc_corr_weighted((meas1_group, selected_person_meas2))
+                    if corr_res is not None and interp_pair is not None:
+                        corr_res_list.append(pd.DataFrame([corr_res]))
+                        interp_pair_list.append(interp_pair)
+                                        
+            # If correlations were calculated, find the best result
+            if corr_res_list and interp_pair_list:
+                corr_res_df = pd.concat(corr_res_list, ignore_index=False)
+                
+                # Find the best correlation result
+                max_abs_corr = corr_res_df['corr'].abs().max()
+                max_corr_rows = corr_res_df[corr_res_df['corr'].abs() == max_abs_corr]
+                
+                # If there are multiple results with the same correlation, choose the one with smallest shift difference
+                if max_corr_rows.shape[0] > 1:
+                    min_shift_index = max_corr_rows['shift_diff'].abs().idxmin()
+                    best_corr_result = max_corr_rows.iloc[min_shift_index]
+                else:
+                    best_corr_result = max_corr_rows.iloc[0]
+                
+                best_corr_result['meas_state'] = meas_state
+                
+                # Find corresponding interp_pair for best_corr_result
+                corr_res_df = corr_res_df.reset_index(drop=True)
+                for idx, row in corr_res_df.iterrows():
+                    if (row['corr'] == best_corr_result['corr']) and (row['shift_diff'] == best_corr_result['shift_diff']):
+                        best_interp_pair = interp_pair_list[idx]
+                        break
+
+                # Save the best correlation result and corresponding interp_pair
+                best_corr_results_list.append(best_corr_result)
+                best_interp_pairs_list.append(best_interp_pair)                    
+                                
+             # Combine the best results for the current pair
+            if best_corr_results_list:
+                best_corr_results_df = pd.DataFrame(best_corr_results_list)
+            else:
+                best_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_state'])
+            
+        # Append to final results
+        final_corr_results_df = pd.concat([final_corr_results_df, best_corr_results_df], ignore_index=True)
+        final_interp_pairs_list += best_interp_pairs_list
+
+    return final_corr_results_df, final_interp_pairs_list
+
+#%%
+def save_final_pairs_plots(corr_results: pd.DataFrame, interp_pairs: list[tuple[Meas, Meas]], folder_name: str):
+    """
+    Saves the histogram and scatter plots for each interpolated pair of Meas objects in the interp_pairs list
+    and associates them with their corresponding correlation results in corr_results.
+
+    Parameters:
+    -----------
+    corr_results : pd.DataFrame
+        A DataFrame containing correlation results, including measurement state. 
+        Each row represents the correlation data for a specific pair of Meas objects.
+
+    interp_pairs : list[tuple[Meas, Meas]]
+        A list of tuples where each tuple contains two interpolated Meas objects.
+        These pairs are used for generating plots.
+
+    folder_name : str
+        The name of the folder where the generated plots will be saved.
+        This folder should exist within a specific structure defined by the measurement type, number, 
+        and state.
+
+    Returns:
+    --------
+    None
+    """
+    # Iterate through both corr_results and interp_pairs
+    for idx in range(len(corr_results)):
+        corr_row = corr_results.iloc[idx]
+        plot_meas1, plot_meas2 = interp_pairs[idx]
+
+        # Extract measurement details from the metadata of plot_meas1
+        meas_type = plot_meas1.metadata.meas_type  # Adjust if the attribute name is different
+        meas_number = plot_meas1.metadata.meas_number  # Adjust if the attribute name is different
+        meas_state = corr_row['meas_state']
+
+        # Define the base folder for saving the plots
+        folder_path = PLOTS_DIR / meas_type / str(meas_number) / meas_state / folder_name
+        
+        # Make a deep copy of the Meas objects to avoid modifying the original data
+        plot_meas1_copy = copy.deepcopy(plot_meas1)
+        plot_meas2_copy = copy.deepcopy(plot_meas2)
+        
+        # Plot and save the histogram and scatter plots
+        plot_histogram_pair((plot_meas1_copy, plot_meas2_copy), folder_path)
+        plot_scatter_pair((plot_meas1_copy, plot_meas2_copy), folder_path)
+
+
+
+
+#%%
+
 
 
 #%%
@@ -837,39 +1174,96 @@ def calc_corr_weighted(meas_pair: tuple['Meas', 'Meas']) -> tuple[dict, tuple['M
 
 
 #%%
+def calculate_mean_hr(nn_intervals: np.ndarray) -> float:
+    """
+    Calculates the mean heart rate (HR) from a series of NN intervals (time between heartbeats).
 
+    Args:
+        nn_intervals (np.ndarray): A numpy array of NN intervals in milliseconds.
 
-#%%
-
-
-
-#%%
-def calculate_mean_hr(nn_intervals):
-    # Sprawdzenie, czy nn_intervals jest numpy ndarray
+    Returns:
+        float: The mean heart rate in beats per minute (bpm).
+    
+    Raises:
+        ValueError: If the input is not a numpy ndarray.
+    """
+    # Check if nn_intervals is a numpy ndarray
     if not isinstance(nn_intervals, np.ndarray):
         raise ValueError("Input must be a numpy ndarray.")
     
-    # Obliczenie średniej interwałów, pomijając NaN
+    # Calculate the mean of the intervals, ignoring NaN values
     mean_interval = np.nanmean(nn_intervals)
     
-    # Obliczenie tętna HR (bpm) na podstawie średniego interwału
-    hr = 60 * 1000 / mean_interval  # interwały w ms, więc przeliczamy na bpm
+    # Calculate HR (bpm) based on the mean interval
+    hr = 60 * 1000 / mean_interval  # intervals are in ms, converting to bpm
     
     return hr
 
+
 #%%
-def calculate_instant_hr(nn_intervals):
-    # Sprawdzenie, czy nn_intervals jest numpy ndarray
+def calculate_instant_hr(nn_intervals: np.ndarray) -> np.ndarray:
+    """
+    Calculates the instantaneous heart rate (HR) for each NN interval in a series.
+
+    Args:
+        nn_intervals (np.ndarray): A numpy array of NN intervals in milliseconds.
+
+    Returns:
+        np.ndarray: An array of instantaneous heart rates in beats per minute (bpm), excluding any NaN values.
+    
+    Raises:
+        ValueError: If the input is not a numpy ndarray.
+    """
+    # Check if nn_intervals is a numpy ndarray
     if not isinstance(nn_intervals, np.ndarray):
         raise ValueError("Input must be a numpy ndarray.")
     
-    # Obliczenie HR dla każdego interwału, pomijając NaN
-    instant_hr = 60 * 1000 / nn_intervals  # Zakładamy, że interwały są w ms
-    instant_hr = instant_hr[~np.isnan(instant_hr)]  # Pomijamy NaN-y, jeśli są
+    # Calculate HR for each interval, assuming intervals are in ms
+    instant_hr = 60 * 1000 / nn_intervals
+    instant_hr = instant_hr[~np.isnan(instant_hr)]  # Exclude any NaN values
     
     return instant_hr
 
 #%%
+def instant_hr_meas(meas_list: list[Meas]):
+    """
+    Calculates instantaneous heart rate (HR) for each Meas object in the copied list 
+    and updates the data in the Meas objects.
+
+    Parameters:
+    -----------
+    meas_list : list[Meas]
+        A list of Meas objects. Each Meas object must have a y_data attribute containing 
+        NN intervals in milliseconds.
+
+    Returns:
+    --------
+    instant_hr_meas_list: list[Meas]
+        A list of Meas objects. Each Meas object must have a y_data attribute containing 
+        instant HR in bpm.
+
+    Raises:
+    -------
+    ValueError: If any of the elements in meas_list is not an instance of Meas.
+    """
+    # Check if all elements are instances of Meas
+    if not all(isinstance(meas, Meas) for meas in meas_list):
+        raise ValueError("All elements in meas_list must be instances of Meas.")
+
+    instant_hr_meas_list = copy.deepcopy(meas_list)
+    
+    # Iterate through each Meas object
+    for meas in instant_hr_meas_list:
+        # Access the NN intervals from meas.data.y_data
+        nn_intervals = meas.data.y_data
+        
+        # Calculate instantaneous HR
+        instant_hr = calculate_instant_hr(nn_intervals)
+        
+        # Update meas.data with the calculated instantaneous HR
+        meas.data.update(new_y_data=instant_hr)
+    
+    return instant_hr_meas_list
 
 
 
