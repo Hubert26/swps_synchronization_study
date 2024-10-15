@@ -222,3 +222,155 @@ def validate_array(array: np.ndarray, min_length: int = 3) -> bool:
         return False
 
     return True
+
+#%%
+def overlapping_sd(signal: tuple[np.ndarray, np.ndarray], window_time: float, overlap: float, min_fraction: float) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculates the standard deviation over overlapping windows in the signal, skipping windows with insufficient data points.
+
+    Parameters:
+    -----------
+    signal : tuple[np.ndarray, np.ndarray]
+        A tuple containing two arrays:
+        - signal[0]: time array (in seconds or another time unit)
+        - signal[1]: corresponding signal values (e.g., heart rate or other measurements)
+        
+    window_time : float
+        The size of the sliding window in the same time unit as the time array.
+        
+    overlap : float
+        Overlap between consecutive windows as a percentage (e.g., 0.5 for 50% overlap).
+    
+    min_fraction : float
+        Minimum fraction of the average number of elements per window. If the number of data points 
+        in a window is less than this threshold, the window is skipped.
+
+    Returns:
+    --------
+    sd_values : np.ndarray
+        An array of calculated standard deviations for each window.
+        
+    window_centers : np.ndarray
+        An array of the center points (times) for each window where SD was calculated.
+    """
+    
+    time, values = signal
+    step_time = window_time * (1 - overlap)  # Calculate the time step based on overlap
+    
+    # Initialize lists to store SD values and window centers
+    sd_values = []
+    window_centers = []
+    
+    # Estimate average number of elements in each window based on the first window
+    avg_elements_per_window = np.mean(np.diff(np.searchsorted(time, [time[0], time[0] + window_time])))
+    min_elements_threshold = avg_elements_per_window * min_fraction  # Set the threshold for minimum elements
+
+    start_idx = 0  # Starting index for sliding window
+    while start_idx < len(time):
+        # Define window start and end times based on the current start_idx
+        window_start_time = time[start_idx]
+        window_end_time = window_start_time + window_time
+        
+        # Find the indices of the points that fall within the window
+        selected_indices = np.where((time >= window_start_time) & (time < window_end_time))[0]
+        
+        # Skip windows that do not meet the minimum elements requirement
+        if len(selected_indices) < min_elements_threshold:
+            # Move the window forward by step_time
+            start_idx = np.searchsorted(time, time[start_idx] + step_time)
+            continue
+        
+        # Extract the signal values for the current window
+        window_values = values[selected_indices]
+        
+        # If the window has more than 1 data point, calculate its standard deviation
+        if len(window_values) > 1:
+            sd = np.std(window_values)
+            sd_values.append(sd)
+            
+            # Calculate the window center in terms of time
+            window_center_time = (window_start_time + window_end_time) / 2
+            window_centers.append(window_center_time)
+        
+        # Move the start index forward by the calculated step_time
+        start_idx = np.searchsorted(time, time[start_idx] + step_time)
+
+    return np.array(sd_values), np.array(window_centers)
+
+#%%
+def overlapping_rmssd(signal: tuple[np.ndarray, np.ndarray], window_time: float, overlap: float, min_fraction: float) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculates the Root Mean Square of Successive Differences (RMSSD) over overlapping windows in the signal, skipping windows with insufficient data points.
+
+    Parameters:
+    -----------
+    signal : tuple[np.ndarray, np.ndarray]
+        A tuple containing two arrays:
+        - signal[0]: time array (in seconds or another time unit)
+        - signal[1]: corresponding signal values (e.g., heart rate or other measurements)
+        
+    window_time : float
+        The size of the sliding window in the same time unit as the time array.
+        
+    overlap : float
+        Overlap between consecutive windows as a percentage (e.g., 0.5 for 50% overlap).
+    
+    min_fraction : float
+        Minimum fraction of the average number of elements per window. If the number of data points 
+        in a window is less than this threshold, the window is skipped.
+
+    Returns:
+    --------
+    rmssd_values : np.ndarray
+        An array of calculated RMSSD values for each window.
+        
+    window_centers : np.ndarray
+        An array of the center points (times) for each window where RMSSD was calculated.
+    """
+    
+    time, values = signal
+    step_time = window_time * (1 - overlap)  # Calculate the time step based on overlap
+    
+    # Initialize lists to store RMSSD values and window centers
+    rmssd_values = []
+    window_centers = []
+    
+    # Estimate average number of elements in each window based on the first window
+    avg_elements_per_window = np.mean(np.diff(np.searchsorted(time, [time[0], time[0] + window_time])))
+    min_elements_threshold = avg_elements_per_window * min_fraction  # Set the threshold for minimum elements
+
+    start_idx = 0  # Starting index for sliding window
+    while start_idx < len(time):
+        # Define window start and end times based on the current start_idx
+        window_start_time = time[start_idx]
+        window_end_time = window_start_time + window_time
+        
+        # Find the indices of the points that fall within the window
+        selected_indices = np.where((time >= window_start_time) & (time < window_end_time))[0]
+        
+        # Skip windows that do not meet the minimum elements requirement
+        if len(selected_indices) < min_elements_threshold:
+            # Move the window forward by step_time
+            start_idx = np.searchsorted(time, time[start_idx] + step_time)
+            continue
+        
+        # Extract the signal values for the current window
+        window_values = values[selected_indices]
+        
+        # If the window has more than 1 data point, calculate RMSSD
+        if len(window_values) > 1:
+            successive_diffs = np.diff(window_values)  # Calculate successive differences
+            rmssd = np.sqrt(np.mean(successive_diffs ** 2))  # Root mean square of successive differences
+            rmssd_values.append(rmssd)
+            
+            # Calculate the window center in terms of time
+            window_center_time = (window_start_time + window_end_time) / 2
+            window_centers.append(window_center_time)
+        
+        # Move the start index forward by the calculated step_time
+        start_idx = np.searchsorted(time, time[start_idx] + step_time)
+
+    return np.array(rmssd_values), np.array(window_centers)
+
+
+

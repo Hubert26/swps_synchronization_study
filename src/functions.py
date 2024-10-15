@@ -12,7 +12,6 @@ import plotly.io as pio
 import plotly.graph_objects as go
 import re
 pio.renderers.default='browser'
-import math
 import copy
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -24,14 +23,12 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from config import *
+from classes import *
 
-from config import logger, MEAS_TYPES
-from classes import Data, Metadata, Meas
 from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
 from utils.file_utils import read_text_file, extract_file_name
-#from utils.matplotlib_utils import save_fig_matplotlib, create_subplots_matplotlib, create_multi_series_bar_chart_matplotlib
 from utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
-from utils.math_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, fisher_transform
+from utils.math_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, fisher_transform, overlapping_sd, overlapping_rmssd
 
 
 #%%
@@ -159,13 +156,15 @@ def load_data(file_paths):
     return meas_list
 
 #%%
-def scatter_plot(meas_list: list[Meas], title: str = None):
+def scatter_plot(meas_list: list[Meas], title: str = "Scatter Plot", x_label: str = "Time [ms]", y_label: str = "Value"):
     """
     Creates a scatter plot from a list of Meas objects.
 
     Args:
         meas_list (list[Meas]): List of Meas objects containing the data to plot.
-        title (str, optional): Title of the plot. Defaults to None.
+        title (str, optional): The title of the plot. Default is "Scatter Plot".
+        x_label (str, optional): Label for the x-axis. Default is "Time [ms]".
+        y_label (str, optional): Label for the y-axis. Default is "Value".
 
     Returns:
         fig: Plotly figure with the created scatter plot.
@@ -186,16 +185,16 @@ def scatter_plot(meas_list: list[Meas], title: str = None):
         legend_labels.append(str(meas))  # Use the __repr__ or __str__ method for labeling
         scatter_colors.append(None)  # You can customize colors if needed
 
-    # Set the plot title if not provided
-    plot_title = title if title else f"Range from {start} to {stop} for {', '.join(legend_labels)}"
+    # Set the plot title
+    plot_title = f"{title} Range from {start} to {stop} for {', '.join(legend_labels)}"
     
     # Create the scatter plot using the existing function
     fig = create_multi_series_scatter_plot_plotly(
         data,
         legend_labels=legend_labels,
         plot_title=plot_title,
-        x_label="Time [ms]",
-        y_label="Time Between Heartbeats [ms]",
+        x_label=x_label,
+        y_label=y_label,
         scatter_colors=scatter_colors,
         mode='markers'
     )
@@ -203,21 +202,26 @@ def scatter_plot(meas_list: list[Meas], title: str = None):
     return fig, plot_title
 
 #%%
-def density_plot(meas_list: list['Meas'], sd_threshold: float = 3, title: str = None):
+def density_plot(meas_list: list['Meas'], sd_threshold: float = 3, title: str = "Density Plot", x_label: str = "Value", y_label: str = "Density"):
     """
     Creates a density plot (histogram) for each time series in the provided list of Meas objects using Plotly.
 
     Args:
         meas_list (list[Meas]): List of Meas objects containing the data to plot.
         sd_threshold (float, optional): The standard deviation multiplier for determining outliers. Default is 3.
-        title (str, optional): The title of the plot. If not provided, a default title will be generated.
+        title (str, optional): The title of the plot. Default is "Density Plot".
+        x_label (str, optional): Label for the x-axis. Default is "Value".
+        y_label (str, optional): Label for the y-axis. Default is "Density".
 
     Returns:
         fig: Plotly figure with the created density plot.
         title: Title used for the plot.
     """
+     
+    # Determine the overall time range of the series
+    stop = max(meas.data.x_data[-1] for meas in meas_list if len(meas.data.x_data) > 0)
+    start = min(meas.data.x_data[0] for meas in meas_list if len(meas.data.x_data) > 0)
     
-    title = "Density Plot of RR-intervals" if title is None else title
     # Prepare data for plotting
     data = []
     legend_labels = []
@@ -234,13 +238,16 @@ def density_plot(meas_list: list['Meas'], sd_threshold: float = 3, title: str = 
         outlier_high = round(np.nanmean(y_data) + sd_threshold * np.nanstd(y_data))
         outlier_info[str(meas)] = (outlier_low, outlier_high)
 
+    # Set the plot title
+    plot_title = f"{title} Range from {start} to {stop} for {', '.join(legend_labels)}"
+
     # Create the density plot using the histogram function in Plotly
     fig = create_multi_series_histogram_plotly(
         data,
         legend_labels=legend_labels,
-        plot_title=title,
-        x_label="RR-interval [ms]",
-        y_label="Density",
+        plot_title=plot_title,
+        x_label=x_label,  # Use custom x_label
+        y_label=y_label,  # Use custom y_label
         show_grid=True
     )
 
@@ -275,23 +282,36 @@ def density_plot(meas_list: list['Meas'], sd_threshold: float = 3, title: str = 
     
     return fig, title
 
+
 #%%
-def meas_plot_from(meas_list: list[Meas], folder_name: str):
+def meas_plot_from(meas_list: list[Meas], folder_name: str, title_label: str = "", value_label: str = "Value"):
     """
-    Generates and saves histogram and scatter plots for original signals 
+    Generates and saves histogram and scatter plots for merged Meas object 
     from a list of Meas objects and saves them in the specified folder.
 
     Parameters:
     -----------
     meas_list : list[Meas]
-        A list of Meas objects to be plotted.
+        A list of Meas objects to be plotted. Each Meas object contains signal data (x_data, y_data) 
+        and associated metadata.
 
     folder_name : str
-        The name of the folder where plots will be saved.
-        
+        The name of the folder where the plots will be saved. A new subdirectory structure will be created 
+        under each measurement type and number.
+
+    title_label : str, optional
+        A label to be used in the title of the plots. If not provided, a default title will be generated 
+        using the without title_label in titles.
+
+    value_label : str, optional
+        A label for the y-axis of the plots. Defaults to "Value", but can be replaced with a more specific 
+        description (e.g., "HR", "RR-interval").
+
     Returns:
     --------
     None
+        The function generates HTML files for both histogram and scatter plots for each Meas object. 
+        These plots are saved in the specified folder structure, but nothing is returned.
     """
     plot_list = copy.deepcopy(meas_list)
     
@@ -313,21 +333,30 @@ def meas_plot_from(meas_list: list[Meas], folder_name: str):
             file_name = str(meas) + str(meas.data.range()[0]) + ".html"
 
             # Create and save histogram plot
-            fig_hist, title_hist = density_plot([meas])
+            fig_hist, title_hist = density_plot([meas], title=f"Density plot of {title_label}", x_label=value_label)
             save_html_plotly(fig_hist, folder_path / 'HISTOGRAM' / file_name)
 
             # Create and save scatter plot
-            fig_scatter, title_scatter = scatter_plot([meas])
+            fig_scatter, title_scatter = scatter_plot([meas], title=f"Scatter plot of {title_label}", y_label=value_label)
             save_html_plotly(fig_scatter, folder_path / 'SCATTER' / file_name)
 
 #%%
-def plot_histogram_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path):
+def plot_histogram_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path, title_label: str = "", value_label: str = "Value"):
     """
     Plots and saves a density histogram for a pair of Meas objects.
 
     Args:
         meas_pair (tuple): A tuple containing two Meas objects (meas1, meas2).
+        
         folder_path (Path): Path to the directory where the histogram will be saved.
+        
+        title_label : str, optional
+            A label to be used in the title of the plots. If not provided, a default title will be generated 
+            using the without title_label in titles.
+
+        value_label : str, optional
+            A label for the y-axis of the plots. Defaults to "Value", but can be replaced with a more specific 
+            description (e.g., "HR", "RR-interval").
     
     Returns:
         None
@@ -348,20 +377,28 @@ def plot_histogram_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path):
     create_directory(folder_path / 'HISTOGRAM')
     
     # Generate the histogram figure
-    fig_hist, title_hist = density_plot([meas1, meas2])
+    fig_hist, title_hist = density_plot([meas1, meas2], title=f"Density plot of {title_label}", x_label=value_label)
     
     # Save the plot as an HTML file
     save_html_plotly(fig_hist, folder_path / 'HISTOGRAM' / file_name)
 
 #%%
-def plot_scatter_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path):
+def plot_scatter_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path, title_label: str = "", value_label: str = "Value"):
     """
     Plots and saves a scatter plot for a pair of Meas objects.
 
     Args:
         meas_pair (tuple): A tuple containing two Meas objects (meas1, meas2).
+        
         folder_path (Path): Path to the directory where the scatter plot will be saved.
-    
+        
+        title_label : str, optional
+            A label to be used in the title of the plots. If not provided, a default title will be generated 
+            using the without title_label in titles.
+
+        value_label : str, optional
+            A label for the y-axis of the plots. Defaults to "Value", but can be replaced with a more specific 
+            description (e.g., "HR", "RR-interval").
     Returns:
         None
     """
@@ -381,15 +418,15 @@ def plot_scatter_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path):
     create_directory(folder_path / 'SCATTER')
     
     # Generate the scatter plot figure
-    fig_scatter, title_scatter = scatter_plot([meas1, meas2])
+    fig_scatter, title_scatter = scatter_plot([meas1, meas2], title=f"Scatter plot of {title_label}", y_label=value_label)
     
     # Save the plot as an HTML file
     save_html_plotly(fig_scatter, folder_path / 'SCATTER' / file_name)
     
 #%%
-def pair_plots_from(meas_list: list[Meas], folder_name: str):
+def pair_plots_from(meas_list: list[Meas], folder_name: str, title_label: str = "", value_label: str = "Value"):
     """
-    Groups Meas objects, filters and merges them, then creates and saves histogram and scatter plots for each pair.
+    Groups Meas objects, merges them, then creates and saves histogram and scatter plots for each pair.
 
     Parameters:
     -----------
@@ -398,6 +435,14 @@ def pair_plots_from(meas_list: list[Meas], folder_name: str):
 
     folder_name : str
         The name of the folder where the plots will be saved.
+        
+    title_label : str, optional
+        A label to be used in the title of the plots. If not provided, a default title will be generated 
+        using the without title_label in titles.
+
+    value_label : str, optional
+        A label for the y-axis of the plots. Defaults to "Value", but can be replaced with a more specific 
+        description (e.g., "HR", "RR-interval").
 
     Returns:
     --------
@@ -406,31 +451,23 @@ def pair_plots_from(meas_list: list[Meas], folder_name: str):
     
     plot_list = copy.deepcopy(meas_list)
     
-    # Group measurements by meas_type and meas_number
-    grouped_meas = group_meas(plot_list, ["meas_type", "meas_number"])
+    grouped_meas = group_meas(meas_list, ["meas_number", "meas_type", "pair_number"])
 
-    # Iterate through each group of measurements
-    for key, group in grouped_meas.items():
-        # Filter and merge measurements
-        filtered_meas = filter_meas(group)
-        merged_meas = merge_grouped(group)
-
-        meas_type, meas_number = key
-        folder_path = PLOTS_DIR / meas_type / str(meas_number) / folder_name
+    # Iterate over each group of measurements
+    for key, group in grouped_meas.items():      
+        meas_number, meas_type, pair_number = key
         
-        # Create directory if it does not exist
-        folder_path.mkdir(parents=True, exist_ok=True)
+        person_meas1 = [meas for meas in group if meas.metadata.gender == 'M']
+        person_meas2 = [meas for meas in group if meas.metadata.gender == 'F']
+        
+        plot_meas1 = merge_meas(person_meas1)
+        plot_meas2 = merge_meas(person_meas2)
+        
+        folder_path = PLOTS_DIR / meas_type / str(meas_number) / folder_name
 
-        # Find pairs of measurements
-        pairs = find_pairs(merged_meas)
+        plot_histogram_pair((plot_meas1, plot_meas2), folder_path, title_label=title_label, value_label=value_label)
+        plot_scatter_pair((plot_meas1, plot_meas2), folder_path, title_label=title_label, value_label=value_label)
 
-        # Generate and save plots for each pair
-        for pair in pairs:
-            plot_meas1, plot_meas2 = copy.deepcopy(pair)
-            plot_histogram_pair((plot_meas1, plot_meas2), folder_path)
-            plot_scatter_pair((plot_meas1, plot_meas2), folder_path)
-
-    
 #%%
 def find_meas(meas_list: list['Meas'], **criteria) -> list['Meas']:
     """
@@ -1114,7 +1151,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
     return final_corr_results_df, final_interp_pairs_list
 
 #%%
-def save_final_pairs_plots(corr_results: pd.DataFrame, interp_pairs: list[tuple[Meas, Meas]], folder_name: str):
+def save_final_pairs_plots(corr_results: pd.DataFrame, interp_pairs: list[tuple[Meas, Meas]], folder_name: str, title_label: str = "", value_label: str = "Value"):
     """
     Saves the histogram and scatter plots for each interpolated pair of Meas objects in the interp_pairs list
     and associates them with their corresponding correlation results in corr_results.
@@ -1133,6 +1170,14 @@ def save_final_pairs_plots(corr_results: pd.DataFrame, interp_pairs: list[tuple[
         The name of the folder where the generated plots will be saved.
         This folder should exist within a specific structure defined by the measurement type, number, 
         and state.
+        
+    title_label : str, optional
+        A label to be used in the title of the plots. If not provided, a default title will be generated 
+        using the without title_label in titles.
+
+    value_label : str, optional
+        A label for the y-axis of the plots. Defaults to "Value", but can be replaced with a more specific 
+        description (e.g., "HR", "RR-interval").
 
     Returns:
     --------
@@ -1149,56 +1194,15 @@ def save_final_pairs_plots(corr_results: pd.DataFrame, interp_pairs: list[tuple[
         meas_state = corr_row['meas_state']
 
         # Define the base folder for saving the plots
-        folder_path = PLOTS_DIR / meas_type / str(meas_number) / meas_state / folder_name
+        folder_path = PLOTS_DIR / meas_type / str(meas_number) / "intervals" / meas_state / folder_name
         
         # Make a deep copy of the Meas objects to avoid modifying the original data
         plot_meas1_copy = copy.deepcopy(plot_meas1)
         plot_meas2_copy = copy.deepcopy(plot_meas2)
         
         # Plot and save the histogram and scatter plots
-        plot_histogram_pair((plot_meas1_copy, plot_meas2_copy), folder_path)
-        plot_scatter_pair((plot_meas1_copy, plot_meas2_copy), folder_path)
-
-
-
-
-#%%
-
-
-
-#%%
-
-
-#%%
-
-
-
-#%%
-def calculate_mean_hr(nn_intervals: np.ndarray) -> float:
-    """
-    Calculates the mean heart rate (HR) from a series of NN intervals (time between heartbeats).
-
-    Args:
-        nn_intervals (np.ndarray): A numpy array of NN intervals in milliseconds.
-
-    Returns:
-        float: The mean heart rate in beats per minute (bpm).
-    
-    Raises:
-        ValueError: If the input is not a numpy ndarray.
-    """
-    # Check if nn_intervals is a numpy ndarray
-    if not isinstance(nn_intervals, np.ndarray):
-        raise ValueError("Input must be a numpy ndarray.")
-    
-    # Calculate the mean of the intervals, ignoring NaN values
-    mean_interval = np.nanmean(nn_intervals)
-    
-    # Calculate HR (bpm) based on the mean interval
-    hr = 60 * 1000 / mean_interval  # intervals are in ms, converting to bpm
-    
-    return hr
-
+        plot_histogram_pair((plot_meas1_copy, plot_meas2_copy), folder_path, title_label=title_label, value_label=value_label)
+        plot_scatter_pair((plot_meas1_copy, plot_meas2_copy), folder_path, title_label=title_label, value_label=value_label)
 
 #%%
 def calculate_instant_hr(nn_intervals: np.ndarray) -> np.ndarray:
@@ -1265,5 +1269,173 @@ def instant_hr_meas(meas_list: list[Meas]):
     
     return instant_hr_meas_list
 
+#%%
+def calculate_overlapping_sd(meas: Meas, window_ms: float, overlap: float, min_fraction: float) -> None:
+    """
+    Calculates the overlapping standard deviations for a Meas object and updates it with the new data.
 
+    Parameters:
+    -----------
+    meas : Meas
+        The Meas object whose data will be updated.
+        
+    window_ms : float
+        The size of the sliding window in milliseconds.
+        
+    overlap : float
+        Overlap between consecutive windows as a percentage (e.g., 0.5 for 50% overlap).
+
+    min_fraction : float
+        Minimum fraction of the average number of elements per window. If the number of data points 
+        in a window is less than this threshold, the window is skipped.
+        
+    Returns:
+    --------
+    None
+        The function updates the Meas object in place, modifying its x_data (time), y_data (standard deviations), 
+        and endtime.
+    """
+    
+    # Extract the time and signal values from the Meas object
+    time = meas.data.x_data
+    values = meas.data.y_data
+    
+    # Calculate the overlapping standard deviations
+    new_y_data, new_x_data = overlapping_sd((time, values), window_time=window_ms, overlap=overlap, min_fraction=min_fraction)
+    
+    # Determine the new end time based on the last window center or the original time
+    last_window_center = new_x_data[-1] if len(new_x_data) > 0 else time[-1]
+    new_endtime = meas.metadata.starttime + timedelta(milliseconds=last_window_center)
+    
+    # Update the Meas object with the new time (x_data), new standard deviation (y_data), and new endtime
+    meas.update(new_x_data=new_x_data, new_y_data=new_y_data, new_endtime=new_endtime)
+
+#%%
+def calculate_overlapping_sd_meas(meas_list: list[Meas], window_ms: float, overlap: float, min_fraction: float) -> list[Meas]:
+    """
+    Calculates overlapping standard deviations (SD) for each Meas object in the copied list 
+    and updates the data in the Meas objects.
+
+    Parameters:
+    -----------
+    meas_list : list[Meas]
+        A list of Meas objects. Each Meas object must have x_data (time in milliseconds) and y_data (signal values).
+        
+    window_ms : float
+        The size of the sliding window in milliseconds.
+        
+    overlap : float
+        Overlap between consecutive windows as a percentage (e.g., 0.5 for 50% overlap).
+
+    min_fraction : float
+        Minimum fraction of the average number of elements per window. If the number of data points 
+        in a window is less than this threshold, the window is skipped.
+
+    Returns:
+    --------
+    sd_meas_list: list[Meas]
+        A list of Meas objects with updated x_data (time) and y_data (standard deviations).
+
+    Raises:
+    -------
+    ValueError: If any of the elements in meas_list is not an instance of Meas.
+    """
+    # Check if all elements are instances of Meas
+    if not all(isinstance(meas, Meas) for meas in meas_list):
+        raise ValueError("All elements in meas_list must be instances of Meas.")
+    
+    # Deep copy the Meas list to avoid modifying the original data
+    sd_meas_list = copy.deepcopy(meas_list)
+    
+    # Iterate through each Meas object in the copied list
+    for meas in sd_meas_list:
+        # Calculate overlapping standard deviations and update the Meas object
+        calculate_overlapping_sd(meas, window_ms=window_ms, overlap=overlap, min_fraction=min_fraction)
+    
+    return sd_meas_list
+
+#%%
+def calculate_overlapping_rmssd(meas: Meas, window_ms: float, overlap: float, min_fraction: float) -> None:
+    """
+    Calculates the overlapping Root Mean Square of Successive Differences (RMSSD) for a Meas object and updates it with the new data.
+
+    Parameters:
+    -----------
+    meas : Meas
+        The Meas object whose data will be updated.
+        
+    window_ms : float
+        The size of the sliding window in milliseconds.
+        
+    overlap : float
+        Overlap between consecutive windows as a percentage (e.g., 0.5 for 50% overlap).
+
+    min_fraction : float
+        Minimum fraction of the average number of elements per window. If the number of data points 
+        in a window is less than this threshold, the window is skipped.
+        
+    Returns:
+    --------
+    None
+        The function updates the Meas object in place, modifying its x_data (time in milliseconds), 
+        y_data (RMSSD values), and endtime.
+    """
+    
+    # Extract the time and signal values from the Meas object
+    time = meas.data.x_data
+    values = meas.data.y_data
+    
+    # Calculate the overlapping RMSSD values and window centers
+    new_y_data, new_x_data = overlapping_rmssd((time, values), window_time=window_ms, overlap=overlap, min_fraction=min_fraction)
+    
+    # Determine the new end time based on the last window center or the original time
+    last_window_center = new_x_data[-1] if len(new_x_data) > 0 else time[-1]
+    new_endtime = meas.metadata.starttime + timedelta(milliseconds=last_window_center)
+    
+    # Update the Meas object with the new time (x_data), new RMSSD (y_data), and new endtime
+    meas.update(new_x_data=new_x_data, new_y_data=new_y_data, new_endtime=new_endtime)
+
+#%%
+def calculate_overlapping_rmssd_meas(meas_list: list[Meas], window_ms: float, overlap: float, min_fraction: float) -> list[Meas]:
+    """
+    Calculates overlapping RMSSD (Root Mean Square of Successive Differences) for each Meas object in the copied list 
+    and updates the data in the Meas objects.
+
+    Parameters:
+    -----------
+    meas_list : list[Meas]
+        A list of Meas objects. Each Meas object must have x_data (time in milliseconds) and y_data (signal values).
+        
+    window_ms : float
+        The size of the sliding window in milliseconds.
+        
+    overlap : float
+        Overlap between consecutive windows as a percentage (e.g., 0.5 for 50% overlap).
+
+    min_fraction : float
+        Minimum fraction of the average number of elements per window. If the number of data points 
+        in a window is less than this threshold, the window is skipped.
+
+    Returns:
+    --------
+    rmssd_meas_list: list[Meas]
+        A list of Meas objects with updated x_data (time) and y_data (RMSSD values).
+
+    Raises:
+    -------
+    ValueError: If any of the elements in meas_list is not an instance of Meas.
+    """
+    # Check if all elements are instances of Meas
+    if not all(isinstance(meas, Meas) for meas in meas_list):
+        raise ValueError("All elements in meas_list must be instances of Meas.")
+    
+    # Deep copy the Meas list to avoid modifying the original data
+    rmssd_meas_list = copy.deepcopy(meas_list)
+    
+    # Iterate through each Meas object in the copied list
+    for meas in rmssd_meas_list:
+        # Calculate overlapping RMSSD and update the Meas object
+        calculate_overlapping_rmssd(meas, window_ms=window_ms, overlap=overlap, min_fraction=min_fraction)
+    
+    return rmssd_meas_list
 
