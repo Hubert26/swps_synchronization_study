@@ -24,8 +24,9 @@ if __name__ == '__main__':
     rr_list = load_data(file_paths)
     nn_list = filter_rr_meas(rr_list)
     hr_list = instant_hr_meas(nn_list)
-    sd_list = calculate_overlapping_sd_meas(nn_list, window_ms=10000, overlap=0.5, min_fraction=0.3)
-    rmssd_list = calculate_overlapping_rmssd_meas(nn_list, window_ms=10000, overlap=0.5, min_fraction=0.3)
+    sd_list = calculate_overlapping_sd_meas(nn_list, window_ms=10000, overlap=0.8, min_fraction=0.3)
+    #%%
+    rmssd_list = calculate_overlapping_rmssd_meas(nn_list, window_ms=10000, overlap=0.8, min_fraction=0.3)
     
 #%%
     #Ploting

@@ -33,7 +33,7 @@ for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
     
 # Map string levels to logging constants
-log_level = getattr(logging, LOGGING_LVL.upper(), logging.INFO)
+log_level = getattr(logging, LOGGING_LVL.upper(), logging.WARNING)
 
 # Set up logging
 logging.basicConfig(
