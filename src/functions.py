@@ -363,7 +363,7 @@ def plot_histogram_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path, tit
     """
     meas1, meas2 = meas_pair
     
-    # Align signals if necessary (assuming time_align_pair is a helper function)
+    # Align signals if necessary
     time_align_pair(meas1, meas2)
     
     # Generate the file name for saving the plot
@@ -404,7 +404,7 @@ def plot_scatter_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path, title
     """
     meas1, meas2 = meas_pair
     
-    # Align signals if necessary (assuming time_align_pair is a helper function)
+    # Align signals if necessary
     time_align_pair(meas1, meas2)
     
     # Generate the file name for saving the plot
@@ -667,10 +667,9 @@ def time_align_pair(meas1: 'Meas', meas2: 'Meas') -> None:
         ValueError: If both Meas objects have the same starttime.
     """
     logger.info(f"Aligned {meas1.metadata} with {meas2.metadata}.")
-    # Calculate the time difference in milliseconds (rounded to the nearest thousand)
+    # Calculate the time difference in milliseconds
     time_diff_ms = calculate_pair_time_difference(meas1, meas2, based_on='starttime')
-    time_diff_ms_rounded = round(time_diff_ms / 1000) * 1000
-    logger.info(f"Time difference in ms between the two measurements: {time_diff_ms_rounded}")
+    logger.info(f"Time difference in ms between the two measurements: {time_diff_ms}")
 
     
     # Identify the younger and older measurement
@@ -684,7 +683,7 @@ def time_align_pair(meas1: 'Meas', meas2: 'Meas') -> None:
     
     # Update the x_data of the younger Meas by adding the rounded time difference
     # Ensure the x_data is adjusted based on the time difference
-    younger_meas.data.x_data += time_diff_ms_rounded
+    younger_meas.data.x_data += time_diff_ms
     # Optionally update the starttime of the younger meas to match the older one
     younger_meas.metadata.starttime = older_meas.metadata.starttime
 
@@ -855,7 +854,9 @@ def interp_meas_pair_uniform_time(meas_pair: tuple['Meas', 'Meas'], ix_step: int
     if not (validate_meas_data(meas1, 3) and validate_meas_data(meas2, 3)):
         logger.info(f"Validation failed in interp_meas_pair_uniform_time for {meas1} and {meas2}")
         return None, None
-
+    
+    time_align_pair(meas1, meas2)
+    
     # Extract the x_data and y_data from both trimmed Meas objects
     signals = [
         (meas1.data.x_data, meas1.data.y_data),
@@ -1012,7 +1013,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
     # Iterate over each group of measurements
     for key, group in grouped_meas.items():      
         meas_number, meas_type, pair_number = key
-        
+                
         person_meas1 = [meas for meas in group if meas.metadata.gender == 'M']
         person_meas2 = [meas for meas in group if meas.metadata.gender == 'F']
         
@@ -1029,7 +1030,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
         # Create shifted versions of the measurement pair
         shifted_meas1_list = []
         shifted_meas2_list = []
-        for shift_ms in range(1000, 5001, 1000):
+        for shift_ms in range(SHIFT_MIN_MS, SHIFT_MAX_MS + 1, SHIFT_STEP_MS):
             # Deep copy first, then shift the copies
             shifted_meas1 = [copy.deepcopy(meas) for meas in person_meas1]
             shifted_meas2 = [copy.deepcopy(meas) for meas in person_meas2]
@@ -1049,6 +1050,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
         
         # Iterate through the selected time intervals
         for (start_ms, end_ms), meas_state in selected_intervals.items():
+                            
             # Calculate the time bounds for selecting based on oldest_starttime
             lower_bound = oldest_starttime + pd.Timedelta(milliseconds=start_ms)
             upper_bound = oldest_starttime + pd.Timedelta(milliseconds=end_ms)
@@ -1104,18 +1106,23 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
             
             if not trimmed_meas2_list and not trimmed_shifted_meas2_list:
                 logger.warning(f"{meas_number}, {meas_type}, {pair_number}: Skipping pair. Lack of trimmed meas2")
-                continue
+                continue            
             
-            # Initialize lists to store correlation results
+            # Lists to store correlation results
             corr_res_list = []
             interp_pair_list = []
             
+            interval_duration_min = (end_ms - start_ms) / 1000 / 60
+
             # Calculate shift1=0 with shift2=0
             if trimmed_meas1_list and trimmed_meas2_list:
                 corr_res, interp_pair = calc_corr_weighted((trimmed_meas1_list, trimmed_meas2_list))
                 if corr_res is not None and interp_pair is not None:
-                    corr_res_list.append(pd.DataFrame([corr_res]))
-                    interp_pair_list.append(interp_pair)
+                    interp_meas1, interp_meas2 = interp_pair
+                    # Ensure that the duration of each interpolated measurement exceeds MIN_DURATION_RATIO * interval_duration_min
+                    if interp_meas1.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO and interp_meas2.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO:
+                        corr_res_list.append(pd.DataFrame([corr_res]))
+                        interp_pair_list.append(interp_pair)                    
             
             # Group trimmed shifted_meas1 by their shift value
             if trimmed_shifted_meas1_list and trimmed_meas2_list:
@@ -1125,8 +1132,11 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 for shift1, meas1_group in trimmed_shifted_gruped_meas1.items():
                     corr_res, interp_pair = calc_corr_weighted((meas1_group, trimmed_meas2_list))
                     if corr_res is not None and interp_pair is not None:
-                        corr_res_list.append(pd.DataFrame([corr_res]))
-                        interp_pair_list.append(interp_pair)
+                        interp_meas1, interp_meas2 = interp_pair
+                        # Ensure that the duration of each interpolated measurement exceeds MIN_DURATION_RATIO * interval_duration_min
+                        if interp_meas1.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO and interp_meas2.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO:
+                            corr_res_list.append(pd.DataFrame([corr_res]))
+                            interp_pair_list.append(interp_pair) 
                         
             if trimmed_shifted_meas2_list and trimmed_meas1_list:
                 trimmed_shifted_gruped_meas2 = group_meas(trimmed_shifted_meas2_list, ["shift"])
@@ -1135,8 +1145,11 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 for shift2, meas2_group in trimmed_shifted_gruped_meas2.items():
                     corr_res, interp_pair = calc_corr_weighted((trimmed_meas1_list, meas2_group))
                     if corr_res is not None and interp_pair is not None:
-                        corr_res_list.append(pd.DataFrame([corr_res]))
-                        interp_pair_list.append(interp_pair)
+                        interp_meas1, interp_meas2 = interp_pair
+                        # Ensure that the duration of each interpolated measurement exceeds MIN_DURATION_RATIO * interval_duration_min
+                        if interp_meas1.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO and interp_meas2.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO:
+                            corr_res_list.append(pd.DataFrame([corr_res]))
+                            interp_pair_list.append(interp_pair) 
                                      
             # If correlations were calculated, find the best result
             if not corr_res_list or not interp_pair_list:

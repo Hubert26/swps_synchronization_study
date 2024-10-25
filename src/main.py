@@ -48,6 +48,7 @@ if __name__ == '__main__':
     hr_results, hr_interp_pairs = process_meas_and_find_corr(hr_list)
     save_final_pairs_plots(hr_results, hr_interp_pairs, folder_name="hr_results", title_label="interpolated and paired Heart Rate", value_label="Heart Rate [bpm]")
     write_to_excel(hr_results, ANALYSIS_DATA_DIR / "hr_results.xlsx")
+    
 #%%
     #sd_correlations
     sd_results, sd_interp_pairs = process_meas_and_find_corr(sd_list)

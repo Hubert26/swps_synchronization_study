@@ -20,6 +20,10 @@ RESULTS_DIR = ROOT_DIR / "results"
 PLOTS_DIR = RESULTS_DIR / "plots"
 ANALYSIS_DATA_DIR = RESULTS_DIR / "analysis_data"
 
+MIN_DURATION_RATIO = 0.5 
+SHIFT_MIN_MS = 1000    # Minimum shift in milliseconds
+SHIFT_MAX_MS = 5000    # Maximum shift in milliseconds
+SHIFT_STEP_MS = 1000   # Step size for each shift in milliseconds
 
 # Create directories if they don't exist
 for directory in [LOGS_DIR, DATA_DIR, RESULTS_DIR, PLOTS_DIR, ANALYSIS_DATA_DIR]:
