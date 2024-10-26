@@ -2,7 +2,7 @@
 """
 Created on Fri Sep 20 12:17:46 2024
 
-@author: huber
+@author: Hubert Szewczyk
 """
 
 import numpy as np
@@ -94,33 +94,7 @@ class Data:
     
         # 5. Return the new start (first value) and end (last value) of the trimmed x_data
         return trimmed_x[0], trimmed_x[-1]
-    
-    def range(self):
-        """Returns the range of x_data and y_data as a tuple."""
-        x_range = (np.min(self.x_data), np.max(self.x_data)) if self.x_data.size > 0 else (None, None)
-        y_range = (np.min(self.y_data), np.max(self.y_data)) if self.y_data.size > 0 else (None, None)
-        return x_range, y_range
-
-    def count_nan(self):
-        """Returns the number of NaN values in x_data and y_data."""
-        x_nan_count = np.isnan(self.x_data).sum()
-        y_nan_count = np.isnan(self.y_data).sum()
-        return x_nan_count, y_nan_count
-    
-    def length(self):
-        """Returns the lengths of x_data and y_data."""
-        return len(self.x_data), len(self.y_data)
-    
-    def count_type(self, expected_type: type):
-        """Checks for expected type in x_data and y_data and returns their counts."""
-        # Check if elements in x_data and y_data are of expected type
-        type_count_x = np.sum(isinstance(val, expected_type) for val in self.x_data)
-        type_count_y = np.sum(isinstance(val, expected_type) for val in self.y_data)
-        
-        return type_count_x, type_count_y
-
-
-    
+     
 #%%
 class Metadata:
     meas_number: int
@@ -435,33 +409,7 @@ def split_nn_rr_meas(meas: 'Meas', threshold: float = 1e-2) -> list['Meas']:
 #%%
 if __name__ == '__main__':
 
-# =============================================================================
-#     # Zakładając, że masz już zdefiniowaną klasę Meas
-#     meas_instance = Meas(np.array([1, 2, 3]), np.array([4, 5, 6]), "example1", "pair1", 0.0, datetime.now(), datetime.now())
-#     
-#     # Głęboka kopia
-#     deep_copied_meas = copy.deepcopy(meas_instance)
-#     deep_copied_meas.update_metadata("deepcopy10", "pair10", 10.0, datetime.now(), datetime.now())
-#     
-#     df = pd.DataFrame({
-#         'pair': [meas_instance.metadata.pair, deep_copied_meas.metadata.pair],
-#         'meas_obj': [meas_instance, deep_copied_meas]
-#     })
-#     
-#     # Tworzenie głębokiej kopii DataFrame
-#     df_copy = copy.deepcopy(df)
-# 
-#     # Aktualizacja danych w kopii DataFrame
-#     # Sprawdź czy para 'pair10' istnieje w df_copy
-#     if 'pair10' in df_copy['pair'].values:
-#         print("Istnieje")
-#         df_copy.loc[df_copy['pair'] == 'pair10', 'meas_obj'].values[0].update(
-#             np.array([100, 200, 300]), 
-#             np.array([400, 500, 600]),
-#             "deepcopy100", "pair100", 100.0, datetime.now(), datetime.now()
-#         )
-# 
-# =============================================================================
+    #Testing
     y_data_1 = np.array([100, 100, 100, 100, 100])
     x_data_1 = np.cumsum(y_data_1, dtype=float)
     endtime_1 = timedelta(milliseconds=x_data_1[-1])
@@ -517,11 +465,3 @@ if __name__ == '__main__':
     merged_x = np.concatenate((x_data_1, x_data_2, x_data_3))
     merged_y = np.concatenate((y_data_1, y_data_2, y_data_3))
     
-    
-#%%
-# =============================================================================
-#     diff_x_data = np.diff(merged_x)
-#     cumsum_y_merged = np.cumsum(merged_y)
-#     
-#     mismatch_indices = np.where(diff_x_data != merged_y[:-1])[0]
-# =============================================================================

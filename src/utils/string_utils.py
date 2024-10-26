@@ -2,7 +2,7 @@
 """
 Created on Wed Sep 18 18:27:45 2024
 
-@author: huber
+@author: Hubert Szewczyk
 """
 import re
 

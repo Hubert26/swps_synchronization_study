@@ -2,7 +2,7 @@
 """
 Created on Tue Sep 10 16:50:13 2024
 
-@author: huber
+@author: Hubert Szewczyk
 """
 
 import os

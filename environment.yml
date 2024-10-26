@@ -1,0 +1,10 @@
+name: swps_synchronization_study_env
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - plotly
+  - scipy
+  - openpyxl
+

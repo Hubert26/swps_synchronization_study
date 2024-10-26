@@ -2,14 +2,13 @@
 """
 Created on Fri Oct 25 18:41:20 2024
 
-@author: huber
+@author: Hubert Szewczyk
 """
 
 import pandas as pd
 
 
 from config import *
-from utils.file_utils import list_file_paths, create_directory, delete_directory
 from utils.dataframe_utils import read_excel_file, write_to_excel
 
 #%%

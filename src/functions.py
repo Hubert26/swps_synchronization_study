@@ -7,29 +7,19 @@ Created on Fri May  3 13:05:29 2024
 from pathlib import Path
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.io as pio
-import plotly.graph_objects as go
 import re
-pio.renderers.default='browser'
 import copy
 from datetime import datetime, timedelta
 from collections import defaultdict
-from scipy.interpolate import interp1d
 from scipy.stats import pearsonr, combine_pvalues, chi2
-
-from IPython.display import display
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 from config import *
 from classes import *
-
 from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
 from utils.file_utils import read_text_file, extract_file_name
 from utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
-from utils.math_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, fisher_transform, overlapping_sd, overlapping_rmssd
-
+from utils.signal_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, overlapping_sd, overlapping_rmssd
+from utils.math_utils import fisher_transform
 
 #%%
 def assign_meas_type(meas_name: str) -> str:
@@ -329,8 +319,12 @@ def meas_plot_from(meas_list: list[Meas], folder_name: str, title_label: str = "
         create_directory(folder_path / 'SCATTER')
 
         for meas in merged_meas:
+            # Determine the overall time range of the series
+            stop = meas.data.x_data[-1]
+            start = meas.data.x_data[0]
+            
             # Generate file name based on the measurement and its data range
-            file_name = str(meas) + str(meas.data.range()[0]) + ".html"
+            file_name = str(meas) + str(start) + str(stop) + ".html"
 
             # Create and save histogram plot
             fig_hist, title_hist = density_plot([meas], title=f"Density plot of {title_label}", x_label=value_label)
@@ -366,11 +360,15 @@ def plot_histogram_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path, tit
     # Align signals if necessary
     time_align_pair(meas1, meas2)
     
+    # Determine the overall time range of the series
+    stop = max(meas.data.x_data[-1] for meas in meas_pair)
+    start = min(meas.data.x_data[0] for meas in meas_pair)
+    
     # Generate the file name for saving the plot
     file_name = (
         f"{str(meas1)};{str(meas2)}_"
-        f"{min(meas1.data.range()[0][0], meas2.data.range()[0][0])}-"
-        f"{max(meas1.data.range()[0][1], meas2.data.range()[0][1])}.html"
+        f"{start}-"
+        f"{stop}.html"
     )
     
     # Create directory for histogram plots if it doesn't exist
@@ -407,11 +405,15 @@ def plot_scatter_pair(meas_pair: tuple['Meas', 'Meas'], folder_path: Path, title
     # Align signals if necessary
     time_align_pair(meas1, meas2)
     
+    # Determine the overall time range of the series
+    stop = max(meas.data.x_data[-1] for meas in meas_pair)
+    start = min(meas.data.x_data[0] for meas in meas_pair)
+    
     # Generate the file name for saving the plot
     file_name = (
         f"{str(meas1)};{str(meas2)}_"
-        f"{min(meas1.data.range()[0][0], meas2.data.range()[0][0])}-"
-        f"{max(meas1.data.range()[0][1], meas2.data.range()[0][1])}.html"
+        f"{start}-"
+        f"{stop}.html"
     )
      
     # Create directory for scatter plots if it doesn't exist
@@ -533,7 +535,7 @@ def validate_meas_metadata(meas_list: list['Meas'], metadata_fields: list[str]) 
 def validate_meas_data(meas: Meas, min_lenght: int = 3):
     if not isinstance(meas, Meas):
         return 0
-    return (validate_array(meas.data.x_data) and validate_array(meas.data.y_data))
+    return (validate_array(meas.data.x_data, min_length=min_lenght) and validate_array(meas.data.y_data, min_length=min_lenght))
 
 #%%
 def merge_meas(meas_list: list['Meas']) -> 'Meas':

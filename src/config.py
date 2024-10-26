@@ -2,14 +2,18 @@
 """
 Created on Sun Sep 22 16:19:39 2024
 
-@author: huber
+@author: Hubert Szewczyk
 """
 
 from pathlib import Path
 import logging
-import sys
 
-from utils.file_utils import create_directory, delete_directory
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+import pandas as pd
+warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
+
+from utils.file_utils import create_directory
 
 
 # Define directories
@@ -20,7 +24,7 @@ RESULTS_DIR = ROOT_DIR / "results"
 PLOTS_DIR = RESULTS_DIR / "plots"
 ANALYSIS_DATA_DIR = RESULTS_DIR / "analysis_data"
 
-MIN_DURATION_RATIO = 0.5 
+MIN_DURATION_RATIO = 0.5 #Minimum durration ratio for signals in intervals to be valid
 SHIFT_MIN_MS = 1000    # Minimum shift in milliseconds
 SHIFT_MAX_MS = 5000    # Maximum shift in milliseconds
 SHIFT_STEP_MS = 1000   # Step size for each shift in milliseconds

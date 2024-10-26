@@ -10,9 +10,9 @@ The project begins by importing and preprocessing signal data from designated di
 `file name`: measurement number, relaxation or cooperation (r/w), gender (k/m), pair number, task registration number, and timestamp (start time).
 
 ### Measurement Filtering
-In some cases, heart rate data may contain artifacts, such as missed or erroneously registered beats due to sensor inaccuracies (e.g., Polar H10). To address this, two types of filtering are applied:
-+ Removal of outliers beyond 2 standard deviations.
-+ Correction of missed beats or spurious detections to ensure signal quality.
+Heart rate data can often contain artifacts, such as missed or erroneously registered beats due to sensor inaccuracies (e.g., Polar H10). To ensure the quality of the signal, two types of filtering are applied:
++ Removal of Outliers: Initially, RR intervals that fall outside the range of [−3×standard deviation,+3×standard deviation] are removed from the dataset. This step helps to eliminate extreme values that could distort the analysis.
++ Correction of Ectopic Beats: The second step involves identifying and removing ectopic heartbeats—those that occur prematurely in the cardiac cycle and are not triggered by the sinoatrial node but rather by spontaneous contractions of the heart muscle. A current RR interval RR[i] is considered ectopic and removed if it differs by more than 20% from the previous interval RR[i−1].
 
 ### Measurement Pairing
 Signal data is paired according to specific criteria, such as measurement type and number. Each pair consists of data from both male and female participants.
@@ -33,7 +33,21 @@ Robust validation procedures are implemented to ensure that only valid and meani
 Correlation results are stored in pandas DataFrames, allowing for the identification of the best correlation for each time-shifted pair. The results, including the strongest correlations and their respective time shifts, are saved for further statistical analysis and interpretation.
 
 ## Code Structure
-main.py: This file contains the main logic for the project, orchestrating the loading, processing, and correlation calculation. It manages the grouping, alignment, and analysis of measurements.
-signal_visualization.py: Handles visualization tasks (if needed), including the plotting of signal data and comparison of measurement pairs over time.
+
+The project is organized into several directories and files, each serving a specific purpose to facilitate the synchronization study analysis. The main directory `src/` contains the source code and is subdivided into various modules:
+
+- `utils/`: This directory includes utility modules such as `dataframe_utils.py`, `file_utils.py`, `math_utils.py`, `signal_utils.py`, `matplotlib_utils.py`, `ml_utils.py`, `plotly_utils.py`, and `string_utils.py`, providing essential functions for data manipulation, mathematical operations, plotting, and more.
+
+- `classes.py`: This file defines the core classes used throughout the project, including `Data`, `Metadata`, and `Meas`, which encapsulate the data structures necessary for managing the time signals data.
+
+- `main.py`: This is the entry point of the application where the main logic for data processing and analysis is executed.
+
+- `functions.py`: This file contains various functions used for data processing and analysis tasks that support the main application logic.
+
+- `config.py`: This file houses configuration settings and constants used across the project.
+
+- `anova_data_preparation.py`: This module is dedicated to preparing data specifically for ANOVA analysis.
+
+The `data/` directory contains subfolders for different types of measurement data, while the `results/` directory holds analysis results and generated plots. The `logs/` directory is used for logging messages during the execution of the code. Additionally, the root directory includes `environment.yml` for environment configuration, `.gitattributes` and `.gitignore` files for version control, and `README.md` for project documentation.
 
 

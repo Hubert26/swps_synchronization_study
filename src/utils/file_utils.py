@@ -2,7 +2,7 @@
 """
 Created on Fri Aug 30 14:40:41 2024
 
-@author: Hubert26
+@author: @author: Hubert Szewczyk
 """
 
 #%%

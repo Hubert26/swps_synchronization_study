@@ -1,7 +1,6 @@
 .spyproject
 __pycache__
 utils/plots/
-draft.py
 plots
 results
 logs
