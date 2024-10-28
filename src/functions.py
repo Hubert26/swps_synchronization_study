@@ -1007,7 +1007,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
         representing the best-correlated pair for each time interval.
     """
     
-    final_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_state'])
+    final_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_number', 'meas_type', 'pair_number', 'meas_state'])
     final_interp_pairs_list = []
     
     grouped_meas = group_meas(meas_list, ["meas_number", "meas_type", "pair_number"])
@@ -1023,8 +1023,8 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
             logger.warning(f"{meas_number}, {meas_type}, {pair_number}: Skipping pair. Lack of meas1 or meas2.")
             continue
             
-        # Get time intervals for the given measurement number and type
-        selected_intervals = get_time_intervals(meas_number, meas_type)
+        # Get time intervals for the given measurement type
+        selected_intervals = get_time_intervals(meas_type)
         
         # Find the oldest starttime among all measurements in the pair
         oldest_starttime = min(meas.metadata.starttime for meas in group)
@@ -1171,6 +1171,9 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                     best_corr_result = max_corr_rows.iloc[0]
                 
                 best_corr_result['meas_state'] = meas_state
+                best_corr_result['meas_number'] = meas_number
+                best_corr_result['meas_type'] = meas_type
+                best_corr_result['pair_number'] = pair_number
                 
                 # Find corresponding interp_pair for best_corr_result
                 corr_res_df = corr_res_df.reset_index(drop=True)
@@ -1187,7 +1190,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 if best_corr_results_list:
                     best_corr_results_df = pd.DataFrame(best_corr_results_list)
                 else:
-                    best_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_state'])
+                    best_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', "meas_number", "meas_type", "pair_number", 'meas_state'])
             
         # Append to final results
         final_corr_results_df = pd.concat([final_corr_results_df, best_corr_results_df], ignore_index=True)
