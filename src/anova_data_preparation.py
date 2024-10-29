@@ -15,11 +15,11 @@ from utils.dataframe_utils import read_excel_file, write_to_excel
 
 #%%
 regex_patterns = {
-    'meas_number': r'^(1|2)',  # Zakładając, że tylko '1' i '2' są wartościami meas_number
-    'condition': r'_(C|R)_',   # Zakładając, że tylko 'C' i 'R' są wartościami condition
+    'meas_number': r'^(1|2)',
+    'condition': r'_(C|R)_',
     'task': r'_(baseline1|baseline2|z\d(?:_\d_[fm])?)_',
-    'value_name': r'_(CORR|SHIFT)_',  # 'CORR' lub 'SHIFT'
-    'measure_type': r'_(HR|SDNN|RMSSD)$'  # 'HR', 'SDNN' lub 'RMSSD'
+    'value_name': r'_(CORR|SHIFT)_',
+    'measure_type': r'_(HR|SDNN|RMSSD)$'
 }
 
 task_order = [
@@ -38,55 +38,60 @@ sorting_rules = {
 #%%
 def extract_column_parts(df: pd.DataFrame, patterns: dict) -> pd.DataFrame:
     """
-    Rozdziela części nazwy kolumn na podstawie określonych regexów.
+    Splits column names into parts based on specified regex patterns.
     
     Parameters:
-    - df (pd.DataFrame): DataFrame z kolumnami do analizy.
-    - patterns (dict): Słownik z regexami dla każdej części kolumny.
+    - df (pd.DataFrame): The DataFrame whose column names need to be split.
+    - patterns (dict): A dictionary with regex patterns for each part to extract.
+                       Keys represent the part name, values contain regex strings.
     
     Returns:
-    - pd.DataFrame: DataFrame z kolumnami rozdzielonymi na części.
+    - pd.DataFrame: A DataFrame with columns representing extracted parts from the 
+                    original column names in `df`.
     """
-    # DataFrame do przechowywania rozdzielonych części nazw kolumn
+    # Create a DataFrame to store the separated parts of column names
     parts_df = pd.DataFrame(index=df.columns)
     
-    # Dopasowanie każdego regexa i wyciągnięcie wartości dla każdej części
+    # Apply each regex pattern to extract parts of column names
     for part, pattern in patterns.items():
-        # Użycie str.findall do uzyskania wszystkich dopasowań
+        # Find all matches for the regex pattern
         parts = df.columns.str.findall(pattern)
 
-        # List comprehension, aby uzyskać pierwsze dopasowanie lub None
+        # Extract the first match for each column or set as None if no match is found
         parts_df[part] = [x[0] if len(x) > 0 else None for x in parts]
     
     return parts_df
 
-
 #%%
 def sort_columns_by_rules(df: pd.DataFrame, patterns: dict, sorting_rules: dict) -> pd.DataFrame:
     """
-    Sortuje kolumny DataFrame’a na podstawie wyodrębnionych części nazw i reguł sortowania.
+    Sorts columns in the DataFrame based on extracted parts from column names and sorting rules.
     
     Parameters:
-    - df (pd.DataFrame): DataFrame do posortowania.
-    - patterns (dict): Słownik z regexami dla każdej części nazwy.
-    - sorting_rules (dict): Reguły sortowania dla wyodrębnionych części.
+    - df (pd.DataFrame): The DataFrame with columns to be sorted.
+    - patterns (dict): A dictionary where keys are part names and values are regex patterns 
+                       to extract those parts from the column names.
+    - sorting_rules (dict): A dictionary specifying the order for each extracted part. 
+                            Keys represent part names, and values are lists with the 
+                            desired sort order for that part.
     
     Returns:
-    - pd.DataFrame: DataFrame z kolumnami posortowanymi na podstawie sorting_rules.
+    - pd.DataFrame: A DataFrame with columns sorted according to the specified rules in `sorting_rules`.
     """
-    # Wyodrębnienie części nazw kolumn
+    # Extract parts of column names using specified regex patterns
     parts_df = extract_column_parts(df, patterns)
-    parts_df['original_column'] = df.columns  # Dodaj oryginalne nazwy kolumn
+    parts_df['original_column'] = df.columns  # Store original column names for reordering
 
-    # Zastosowanie reguł sortowania
+    # Apply sorting rules for each part based on provided order lists
     for col_name, order in sorting_rules.items():
         parts_df[col_name] = pd.Categorical(parts_df[col_name], categories=order, ordered=True)
     
-    # Sortowanie
+    # Sort parts_df based on sorting rules to get the correct column order
     sorted_parts_df = parts_df.sort_values(list(sorting_rules.keys()))
     
-    # Zwrócenie DataFrame’a z posortowanymi kolumnami
+    # Reorder columns in the original DataFrame based on sorted column names
     return df[sorted_parts_df['original_column'].values]
+
 
 #%%
 def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
