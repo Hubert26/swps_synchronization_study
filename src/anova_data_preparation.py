@@ -219,7 +219,7 @@ if __name__ == '__main__':
         "           - exercise_round:\n"
         "               - '1' to '6': indicates the sequential round of the exercise within the task (e.g., '1' for the first round, '2' for the second, etc.)\n"
         "           - gender:\n"
-        "               - 'f' for female and 'm' for male: indicates who leads in specific exercise\n"
+        "               - 'f' for female and 'm' for male: indicates who was instructed to lead in the exercise\n"
         "       - z<exercise_number>: all exercises parts in specific exercise\n"
         "           - exercise_number:\n"
         "               - '1' for first exercise in condition\n"
