@@ -913,7 +913,7 @@ def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple[
 
     interp_meas1_list = []
     interp_meas2_list = []
-
+    
     # Iterate over each Meas object from both lists to calculate pairwise correlation
     for meas1 in meas1_list:
         for meas2 in meas2_list:            
@@ -940,7 +940,7 @@ def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple[
             corr = fisher_transform(corr)
             
             # Calculate the length of the interpolated signal as weight
-            weight = len(interp_meas1.data.y_data)
+            weight = len(interp_meas1.data.x_data)
 
             # Append results to their respective lists
             corr_list.append(corr)
@@ -1052,7 +1052,10 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
         
         # Iterate through the selected time intervals
         for (start_ms, end_ms), meas_state in selected_intervals.items():
-                            
+            
+            if (meas_number == 1 and meas_type=="Cooperation" and pair_number==11 and meas_state=="z1_1_f"):
+                print(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}")
+                
             # Calculate the time bounds for selecting based on oldest_starttime
             lower_bound = oldest_starttime + pd.Timedelta(milliseconds=start_ms)
             upper_bound = oldest_starttime + pd.Timedelta(milliseconds=end_ms)
@@ -1074,7 +1077,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 try:
                     tm1 = trim_meas(loop_meas1, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
                     continue
                 trimmed_meas1_list.append(tm1)
             
@@ -1082,7 +1085,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 try:
                     tm2 = trim_meas(loop_meas2, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
                     continue
                 trimmed_meas2_list.append(tm2)
                 
@@ -1090,7 +1093,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 try:
                     tsm1 = trim_meas(loop_meas1, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
                     continue
                 trimmed_shifted_meas1_list.append(tsm1)
 
@@ -1098,16 +1101,16 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 try:
                     tsm2 = trim_meas(loop_meas2, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
                     continue
                 trimmed_shifted_meas2_list.append(tsm2)
                 
             if not trimmed_meas1_list and not trimmed_shifted_meas1_list:
-                logger.warning(f"{meas_number}, {meas_type}, {pair_number}: Skipping pair. Lack of trimmed meas1")
+                logger.warning(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Skipping pair. Lack of trimmed meas1")
                 continue
             
             if not trimmed_meas2_list and not trimmed_shifted_meas2_list:
-                logger.warning(f"{meas_number}, {meas_type}, {pair_number}: Skipping pair. Lack of trimmed meas2")
+                logger.warning(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Skipping pair. Lack of trimmed meas2")
                 continue            
             
             # Lists to store correlation results
@@ -1132,6 +1135,11 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 
                 # Calculate shift2=0 with every shift1
                 for shift1, meas1_group in trimmed_shifted_gruped_meas1.items():
+                    
+                    if (meas_number == 1 and meas_type=="Cooperation" and pair_number==11 and meas_state=="z1_1_f" and shift1==4.0):
+                        print(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}")
+                    
+                        
                     corr_res, interp_pair = calc_corr_weighted((meas1_group, trimmed_meas2_list))
                     if corr_res is not None and interp_pair is not None:
                         interp_meas1, interp_meas2 = interp_pair
