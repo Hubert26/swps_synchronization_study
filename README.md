@@ -16,18 +16,23 @@ Heart rate data can often contain artifacts, such as missed or erroneously regis
 + Correction of Ectopic Beats: The second step involves identifying and removing ectopic heartbeats—those that occur prematurely in the cardiac cycle and are not triggered by the sinoatrial node but rather by spontaneous contractions of the heart muscle. A current RR interval RR[i] is considered ectopic and removed if it differs by more than 20% from the previous interval RR[i−1].
 
 **Oryginal and Filtered Histograms**
-![Sample pair histogram of RR signals](https://github.com/Hubert26/swps_synchronization_study/images/rr_hist_image.png)
-![Sample pair histogram of NN signals](https://github.com/Hubert26/swps_synchronization_study/images/nn_hist_image.png)
+![Sample pair histogram of RR signals](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/rr_hist_image.png
+"Sample pair histogram of RR signals")
+![Sample pair histogram of NN signals](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/nn_hist_image.png
+"Sample pair histogram of NN signals")
 
 ### Signal Processing of NN Intervals into Different Metrics
 + **Instant Heart Rate (HR):** Calculated by converting NN intervals to beats per minute (BPM), providing an immediate measure of heart rate.
-![Sample of interpolated HR signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/images/hr_image.png)
+![Sample of interpolated HR signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/hr_image.png
+"Sample of interpolated HR signal durring first series of tasks")
 
 + **Standard Deviation of NN Intervals (SDNN):** Captures overall heart rate variability, indicating stability or variability in heart rhythm over the measurement period.
-![Sample of interpolated SDNN signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/images/sdnn_image.png)
+![Sample of interpolated SDNN signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/sdnn_image.png
+"Sample of interpolated SDNN signal durring first series of tasks")
 
 + **Root Mean Square of Successive Differences (RMSSD):** Calculated in 10-second windows with an 8-second overlap. This metric focuses on short-term variability and reflects parasympathetic nervous system activity.
-![Sample of interpolated RMSSD signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/images/rmssd_image.png)
+![Sample of interpolated RMSSD signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/rmssd_image.png
+"Sample of interpolated RMSSD signal durring first series of tasks")
 
 ### Measurement Pairing
 Signal data is paired according to specific criteria, such as measurement type and number. Each pair consists of data from both male and female participants.
@@ -75,5 +80,5 @@ Please note that these files are available for download only, and no editing or 
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/Hubert26/swps_synchronization_study/LICENSE.txt) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/Hubert26/swps_synchronization_study/blob/main/LICENSE.txt) file for details.
 
