@@ -4,6 +4,7 @@ ___
 This project focuses on the analysis of signal data by calculating weighted correlations between pairs of measurements, with a special emphasis on heart rate signals. The methodology includes data loading, filtering, merging, and aligning of signals to assess the relationships between time-shifted measurements across various intervals.
 
 ## Key Features
+
 ### Data Loading
 The project begins by importing and preprocessing signal data from designated directories. Measurements are organized by type and number, with each file name containing critical metadata:
 
@@ -14,17 +15,31 @@ Heart rate data can often contain artifacts, such as missed or erroneously regis
 + Removal of Outliers: Initially, RR intervals that fall outside the range of [−3×standard deviation,+3×standard deviation] are removed from the dataset. This step helps to eliminate extreme values that could distort the analysis.
 + Correction of Ectopic Beats: The second step involves identifying and removing ectopic heartbeats—those that occur prematurely in the cardiac cycle and are not triggered by the sinoatrial node but rather by spontaneous contractions of the heart muscle. A current RR interval RR[i] is considered ectopic and removed if it differs by more than 20% from the previous interval RR[i−1].
 
+**Oryginal and Filtered Histograms**
+![Sample pair histogram of RR signals](https://github.com/Hubert26/swps_synchronization_study/images/rr_hist_image.png)
+![Sample pair histogram of NN signals](https://github.com/Hubert26/swps_synchronization_study/images/nn_hist_image.png)
+
+### Signal Processing of NN Intervals into Different Metrics
++ **Instant Heart Rate (HR):** Calculated by converting NN intervals to beats per minute (BPM), providing an immediate measure of heart rate.
+![Sample of interpolated HR signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/images/hr_image.png)
+
++ **Standard Deviation of NN Intervals (SDNN):** Captures overall heart rate variability, indicating stability or variability in heart rhythm over the measurement period.
+![Sample of interpolated SDNN signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/images/sdnn_image.png)
+
++ **Root Mean Square of Successive Differences (RMSSD):** Calculated in 10-second windows with an 8-second overlap. This metric focuses on short-term variability and reflects parasympathetic nervous system activity.
+![Sample of interpolated RMSSD signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/images/rmssd_image.png)
+
 ### Measurement Pairing
 Signal data is paired according to specific criteria, such as measurement type and number. Each pair consists of data from both male and female participants.
-
-### Measurement Merging
-Occasionally, participants experience interruptions in data recording. When such disconnections occur, this project provides functionality to merge separate intervals of measurement, ensuring continuity in the data.
 
 ### Measurement Shifting
 In some pairs, one individual may lead the other in terms of signal patterns. To identify the strongest correlation, signals are time-shifted to account for this leading effect, optimizing alignment for accurate correlation analysis.
 
 ### Time Interval Processing
 Measurements are segmented into specific time intervals, which correspond to different tasks performed by the participants. These intervals are customizable and are selected based on the measurement type and number.
+
+### Measurement Merging
+Occasionally, participants experience interruptions in data recording. When such disconnections occur, this project provides functionality to merge separate intervals of measurement, ensuring continuity in the data.
 
 ### Error Handling and Validation
 Robust validation procedures are implemented to ensure that only valid and meaningful data are utilized for correlation analysis. Invalid inputs, such as incomplete time ranges or missing data, are logged, and the system automatically skips over problematic datasets.
