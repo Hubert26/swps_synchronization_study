@@ -50,4 +50,7 @@ The project is organized into several directories and files, each serving a spec
 
 The `data/` directory contains subfolders for different types of measurement data, while the `results/` directory holds analysis results and generated plots. The `logs/` directory is used for logging messages during the execution of the code. Additionally, the root directory includes `environment.yml` for environment configuration, `.gitattributes` and `.gitignore` files for version control, and `README.md` for project documentation.
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/Hubert26/swps_synchronization_study/LICENSE.txt) file for details.
 
