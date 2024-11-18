@@ -3,12 +3,53 @@ ___
 ## Project Overview
 This project focuses on the analysis of signal data by calculating weighted correlations between pairs of measurements, with a special emphasis on heart rate signals. The methodology includes data loading, filtering, merging, and aligning of signals to assess the relationships between time-shifted measurements across various intervals.
 
+## Installation
+
+To set up the `swps_synchronization_study` project, ensure that you have Conda installed and follow these steps:
+
+### 1. Clone the Required Repositories
+Clone both the `swps_synchronization_study` and `python-utils` repositories to your local machine. Ensure that both repositories are placed in the same parent directory to allow proper linking of the python-utils package.
+Example directory structure:
+```
+parent_directory/
+├── swps_synchronization_study/
+├── python-utils/
+```
+Clone the repositories:
+```
+git clone https://github.com/Hubert26/swps_synchronization_study.git
+git clone https://github.com/Hubert26/python-utils.git
+```
+### 2. Create and Activate the Environment
++ Navigate to the swps_synchronization_study project directory:
+```
+cd swps_synchronization_study
+```
++ Create the Conda environment from the `environment.yml` file:
+```
+conda env create -f environment.yml
+```
++ Activate the environment:
+```
+conda activate swps_synchronization_study_env
+```
+
+### Notes
++ The `environment.yml` file ensures the `python-utils` package is installed with all required optional dependencies.
++ Any changes to the `python-utils` project will reflect automatically in this setup because of the editable installation.
+
 ## Key Features
 
 ### Data Loading
-The project begins by importing and preprocessing signal data from designated directories. Measurements are organized by type and number, with each file name containing critical metadata:
+The project starts by importing and preprocessing signal data from specific directories. Measurements are categorized by type and number, with each filename containing key metadata, such as:
 
-`file name`: measurement number, relaxation or cooperation (r/w), gender (k/m), pair number, task registration number, and timestamp (start time).
+**Measurement Number:** Sequential identifier for each measurement.
+**Condition:** Either relaxation (`r`) or cooperation (`w`).
+**Gender:** Female (`k`) or male (`m`).
+**Pair Number:** Identifier for paired participants.
+**Part of Registered Signal:** Unique identifier for each signal part.
+**Timestamp:** Start time of the measurement (in `YYYY-MM-DD HH-MM-SS` format).
+For example, the filename `1wk2_1 2023-07-30 19-01-36` represents measurement number (`1`), a cooperation session (`w`), female participant (`k`), pair number (`2`), part of registered signal (`1`), recorded at (`2023-07-30 19:01:36`).
 
 ### Measurement Filtering
 Heart rate data can often contain artifacts, such as missed or erroneously registered beats due to sensor inaccuracies (e.g., Polar H10). To ensure the quality of the signal, two types of filtering are applied:
@@ -26,7 +67,7 @@ Heart rate data can often contain artifacts, such as missed or erroneously regis
 ![Sample of interpolated HR signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/hr_image.png
 "Sample of interpolated HR signal durring first series of tasks")
 
-+ **Standard Deviation of NN Intervals (SDNN):** Captures overall heart rate variability, indicating stability or variability in heart rhythm over the measurement period.
++ **Standard Deviation of NN Intervals (SDNN):** Calculated in 10-second windows with an 8-second overlap. Captures overall heart rate variability, indicating stability or variability in heart rhythm over the measurement period.
 ![Sample of interpolated SDNN signal durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/sdnn_image.png
 "Sample of interpolated SDNN signal durring first series of tasks")
 
@@ -56,7 +97,7 @@ Correlation results are stored in pandas DataFrames, allowing for the identifica
 
 The project is organized into several directories and files, each serving a specific purpose to facilitate the synchronization study analysis. The main directory `src/` contains the source code and is subdivided into various modules:
 
-- `utils/`: This directory includes utility modules such as `dataframe_utils.py`, `file_utils.py`, `math_utils.py`, `signal_utils.py`, `matplotlib_utils.py`, `ml_utils.py`, `plotly_utils.py`, and `string_utils.py`, providing essential functions for data manipulation, mathematical operations, plotting, and more.
+- `utils/`: This directory includes utility modules such as `dataframe_utils.py`, `file_utils.py`, `math_utils.py`, `signal_utils.py`, `plotly_utils.py`, and `string_utils.py`, providing essential functions for data manipulation, mathematical operations, plotting, and more.
 
 - `classes.py`: This file defines the core classes used throughout the project, including `Data`, `Metadata`, and `Meas`, which encapsulate the data structures necessary for managing the time signals data.
 
