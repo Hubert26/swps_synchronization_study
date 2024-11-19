@@ -10,13 +10,8 @@ import pandas as pd
 import copy
 
 from datetime import datetime, timedelta
-from dataclasses import field
+from dataclasses import field, dataclass
 
-
-    
-#%%
-class DataValidationError(Exception):
-    pass
 
 #%%
 class Data:
@@ -302,166 +297,21 @@ class Meas:
         return f"{self.metadata.meas_number}{self.metadata.meas_type}{self.metadata.gender}{self.metadata.pair_number}_{self.metadata.shift}"
 
 #%%
-def split_nn_rr_meas(meas: 'Meas', threshold: float = 1e-2) -> list['Meas']:
-    """
-    Splits a Meas object (specifically for NN or RR intervals) into multiple Meas objects 
-    wherever there's a mismatch between np.diff(x_data) and y_data, indicating a gap in the data.
-
-    Args:
-        meas (Meas): The Meas object containing NN or RR interval data.
-        threshold (float, optional): The tolerance level for detecting gaps based on differences 
-                                     in x_data and y_data. Default is 1e-2.
-    
-    Returns:
-        list[Meas]: A list of Meas objects, each representing a contiguous segment of the input data.
-    """
-
-    def recursive_split(x_data, y_data, starttime, threshold):
-        """
-        Helper function that performs the recursive splitting of the data.
-
-        Args:
-            x_data (ndarray): The x-axis data (typically time) of the measurement.
-            y_data (ndarray): The y-axis data (typically the measured intervals).
-            starttime (datetime): The start time for the data segment.
-            threshold (float): The tolerance level for detecting gaps.
-
-        Returns:
-            list[Meas]: A list of Meas objects for each detected segment.
-        """
-        # Base case: if the segment is too small to split
-        if len(x_data) <= 1:
-            norm_x_data = x_data - x_data[0] + y_data[0]
-            return [Meas(
-                x_data=norm_x_data,
-                y_data=y_data,
-                meas_number=meas.metadata.meas_number,
-                meas_type=meas.metadata.meas_type,
-                gender=meas.metadata.gender,
-                pair_number=meas.metadata.pair_number,
-                shift=meas.metadata.shift,
-                starttime=starttime,
-                endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
-            )]
-
-        # Calculate the differences between consecutive x_data elements
-        diff_x_data = np.diff(x_data)
-
-        # Identify indices where the diff in x_data does not match y_data
-        mismatch_indices = np.where(np.abs(diff_x_data - y_data[1:]) > threshold)[0]
-
-        # Normalize x_data
-        norm_x_data = x_data - x_data[0] + y_data[0]
-
-        if len(mismatch_indices) == 0:
-            # No gaps detected, return a single Meas object
-            return [Meas(
-                x_data=norm_x_data,
-                y_data=y_data,
-                meas_number=meas.metadata.meas_number,
-                meas_type=meas.metadata.meas_type,
-                gender=meas.metadata.gender,
-                pair_number=meas.metadata.pair_number,
-                shift=meas.metadata.shift,
-                starttime=starttime,
-                endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
-            )]
-
-        # First mismatch (gap detected)
-        first_mismatch = mismatch_indices[0] + 1
-
-        # Split x_data and y_data into two parts at the gap
-        y_data_1, y_data_2 = y_data[:first_mismatch], y_data[first_mismatch:]
-        x_data_1, x_data_2 = x_data[:first_mismatch], x_data[first_mismatch:]
-
-        # If the second part is empty, return only the first part
-        if len(x_data_2) == 0 or len(y_data_2) == 0:
-            return [Meas(
-                x_data=x_data_1,
-                y_data=y_data_1,
-                meas_number=meas.metadata.meas_number,
-                meas_type=meas.metadata.meas_type,
-                gender=meas.metadata.gender,
-                pair_number=meas.metadata.pair_number,
-                shift=meas.metadata.shift,
-                starttime=starttime,
-                endtime=starttime + timedelta(milliseconds=norm_x_data[-1])
-            )]
-
-        # Normalize the first part of x_data
-        x_data_1 = x_data_1 - x_data_1[0] + y_data_1[0]
-
-        # Calculate the new start time for the second part
-        starttime_2 = starttime + timedelta(milliseconds=(norm_x_data[first_mismatch] - y_data[first_mismatch]))
-
-        # Recursively split both parts
-        return (
-            recursive_split(x_data_1, y_data_1, starttime, threshold) +
-            recursive_split(x_data_2, y_data_2, starttime_2, threshold)
-        )
-
-    # Start the recursive splitting process
-    return recursive_split(meas.data.x_data, meas.data.y_data, meas.metadata.starttime, threshold)
-
-
-
+@dataclass
+class MeasurementRecord:
+    meas_number: int
+    meas_type: str
+    pair_number: int
+    meas_state: str
+    shift_diff: float
+    corr: float
+    p_val: float
+    name_meas1: str
+    name_meas2: str
+    meas1: Meas
+    meas2: Meas
 
 #%%
 if __name__ == '__main__':
-
-    #Testing
-    y_data_1 = np.array([100, 100, 100, 100, 100])
-    x_data_1 = np.cumsum(y_data_1, dtype=float)
-    endtime_1 = timedelta(milliseconds=x_data_1[-1])
-
-    meas1 = Meas(
-        x_data=x_data_1, 
-        y_data=y_data_1, 
-        meas_number=1, 
-        meas_type="HR", 
-        gender="M", 
-        pair_number=1, 
-        shift=0.0, 
-        starttime=datetime(2024, 9, 24, 10, 0, 0), 
-        endtime=datetime(2024, 9, 24, 10, 0, 0) + endtime_1
-    )
-    
-    y_data_2 = np.array([101, 101, 101, 101, 101])
-    x_data_2 = np.cumsum(y_data_2, dtype=float)
-    endtime_2 = timedelta(milliseconds=x_data_2[-1])
-    
-    meas2 = Meas(
-        x_data=x_data_2, 
-        y_data=y_data_2, 
-        meas_number=1, 
-        meas_type="HR", 
-        gender="M", 
-        pair_number=1, 
-        shift=0.0, 
-        starttime=datetime(2024, 9, 24, 10, 5, 1), 
-        endtime=datetime(2024, 9, 24, 10, 5, 1) + endtime_2
-    )
-    
-    y_data_3 = np.array([110, 110, 110, 110, 110])
-    x_data_3 = np.cumsum(y_data_3, dtype=float)
-    endtime_3 = timedelta(milliseconds=x_data_3[-1])
-    
-    meas3 = Meas(
-        x_data=x_data_3, 
-        y_data=y_data_3, 
-        meas_number=1, 
-        meas_type="HR", 
-        gender="M", 
-        pair_number=1, 
-        shift=0.0, 
-        starttime=datetime(2024, 9, 24, 10, 10, 10), 
-        endtime=datetime(2024, 9, 24, 10, 10, 10) + endtime_3
-    )
-    
-    merged_meas = meas1 + meas2 + meas3
-    
-    splitted_meas_list = merged_meas.split()
-    
-    merged_x = np.concatenate((x_data_1, x_data_2, x_data_3))
-    merged_y = np.concatenate((y_data_1, y_data_2, y_data_3))
+    print("classes.py")
     

@@ -12,14 +12,16 @@ import copy
 from datetime import datetime, timedelta
 from collections import defaultdict
 from scipy.stats import pearsonr, combine_pvalues, chi2
+import matplotlib.pyplot as plt
 
 from config import *
 from classes import *
-from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
+from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly, create_heatmap_plotly
 from utils.file_utils import read_text_file, extract_file_name
 from utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
 from utils.signal_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, overlapping_sd, overlapping_rmssd
 from utils.math_utils import fisher_transform
+from utils.matplotlib_utils import save_fig_matplotlib, create_heatmap_matplotlib
 
 #%%
 def assign_meas_type(meas_name: str) -> str:
@@ -571,6 +573,32 @@ def merge_meas(meas_list: list['Meas']) -> 'Meas':
     return merged_meas
 
 #%%
+def group_object_list(obj_list: list, attributes: list[str]) -> dict[tuple, list]:
+    """
+    Groups objects from the given list based on specified attributes.
+
+    Args:
+        obj_list (list): List of objects to group.
+        attributes (list[str]): List of attribute names to group by (e.g., ["attr1", "attr2"]).
+
+    Returns:
+        dict[tuple, list]: Dictionary where the keys are tuples of attribute values, 
+                            and the values are lists of objects grouped by these attribute values.
+    """
+    grouped_objs = defaultdict(list)
+    
+    # Check that all objects in the list have the necessary attributes
+    for obj in obj_list:
+        try:
+            # Create a tuple with the selected attribute values for grouping
+            attribute_tuple = tuple(getattr(obj, attr) for attr in attributes)
+            grouped_objs[attribute_tuple].append(obj)
+        except AttributeError as e:
+            print(f"Error accessing attributes: {e}, object: {obj}")
+
+    return grouped_objs
+
+#%%
 def group_meas(meas_list: list['Meas'], attributes: list[str]) -> dict[tuple, list['Meas']]:
     """
     Groups Meas objects from the given list based on specified metadata attributes.
@@ -877,7 +905,7 @@ def interp_meas_pair_uniform_time(meas_pair: tuple['Meas', 'Meas'], ix_step: int
 
 
 #%%
-def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple[dict, tuple['Meas', 'Meas']]:
+def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple:
     """
     Calculates the weighted Pearson correlation coefficient and combines p-values for each pair of 
     Meas objects from two lists, based on their interpolated signals. Handles trimming, 
@@ -891,19 +919,20 @@ def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple[
 
     Returns:
     --------
-    avg_corr_result : dict
-        A dictionary containing the weighted average correlation coefficient (`corr`), 
-        combined p-value (`p_val`), the string representations of the Meas objects (`meas1`, `meas2`), 
-        and their shift difference (`shift_diff`).
-
-    merged_meas_pair : tuple[Meas, Meas]
-        The merged and interpolated Meas objects after trimming, interpolation, and merging on a uniform time grid.
+    tuple:
+        - avg_corr (float): The weighted average of the Fisher-transformed Pearson correlation coefficients.
+        - combined_p_val (float): The combined p-value derived using Fisher's method.
+        - shift_diff (float): The difference in shift values from the metadata of the two Meas objects.
+        - meas1_name (str): String representation of the first Meas object in the pair.
+        - meas2_name (str): String representation of the second Meas object in the pair.
+        - merged_meas1 (Meas): Meas object from the interpolated and combined signals from input lists.
+        - merged_meas2 (Meas): Meas object from the interpolated and combined signals from input lists.
 
     Notes:
     ------
-    - The weighted average correlation is calculated based on the length of the interpolated signal as weight.
+    - If no valid correlations are computed, the function will return `(None, None)`.
+    - The weighted average correlation is calculated based on the length of the interpolated signals as weights.
     - P-values are combined using Fisher’s method via `combine_pvalues`.
-    - If no valid correlations are computed, the function will return (None, None).
     """
     meas1_list, meas2_list = meas_pair_lists
     
@@ -950,7 +979,7 @@ def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple[
     # If no valid correlations were computed, return None
     if not corr_list:
         logger.info(f"No valid correlations were computed for {meas1_list} and {meas2_list}")
-        return None, None
+        return None, None, meas1.metadata.shift - meas2.metadata.shift, str(meas1), str(meas2), None, None
 
     try:
         # Merge the interpolated Meas objects from both lists
@@ -974,19 +1003,10 @@ def calc_corr_weighted(meas_pair_lists: tuple[list[Meas], list[Meas]]) -> tuple[
     # Convert Fisher's method chi-square statistic to p-value
     combined_p_val = 1 - chi2.cdf(fisher_stat, 2 * len(p_val_list))  # Degrees of freedom = 2 * number of p-values
 
-    # Prepare the result dictionary with correlation, combined p-value, and other metadata
-    avg_corr_result = {
-        'corr': avg_corr,
-        'p_val': combined_p_val,  # Combined p-value
-        'meas1': str(meas1),
-        'meas2': str(meas2),
-        'shift_diff': meas1.metadata.shift - meas2.metadata.shift
-    }
-
-    return avg_corr_result, (merged_meas1, merged_meas2)
+    return avg_corr, combined_p_val, meas1.metadata.shift - meas2.metadata.shift, str(meas1), str(meas2), merged_meas1, merged_meas2
 
 #%%
-def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, list[tuple[Meas, Meas]]]:
+def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]:
     """
     Calculates the best weighted correlation between pairs of measurements, including shifted versions, 
     for various time intervals. Also identifies the best pair with the maximum correlation and smallest 
@@ -999,16 +1019,11 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
 
     Returns:
     --------
-    final_corr_results_df : pd.DataFrame
-        A DataFrame containing the correlation results for each measurement pair.
-    
-    final_interp_pairs_list : list[tuple[Meas, Meas]]
-        A list of tuples, where each tuple contains two interpolated Meas objects 
-        representing the best-correlated pair for each time interval.
+    final_corr_results : list[MeasurementRecord]
+        A list of MeasurementRecord objects containing the correlation results for each measurement pair.
     """
     
-    final_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', 'meas_number', 'meas_type', 'pair_number', 'meas_state'])
-    final_interp_pairs_list = []
+    final_corr_results = []
     
     grouped_meas = group_meas(meas_list, ["meas_number", "meas_type", "pair_number"])
 
@@ -1047,15 +1062,10 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
             shifted_meas1_list.extend(shifted_meas1)
             shifted_meas2_list.extend(shifted_meas2)
         
-        best_corr_results_list = []
-        best_interp_pairs_list = []
         
         # Iterate through the selected time intervals
         for (start_ms, end_ms), meas_state in selected_intervals.items():
-            
-            if (meas_number == 1 and meas_type=="Cooperation" and pair_number==11 and meas_state=="z1_1_f"):
-                print(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}")
-                
+                            
             # Calculate the time bounds for selecting based on oldest_starttime
             lower_bound = oldest_starttime + pd.Timedelta(milliseconds=start_ms)
             upper_bound = oldest_starttime + pd.Timedelta(milliseconds=end_ms)
@@ -1113,152 +1123,276 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> tuple[pd.DataFrame, lis
                 logger.warning(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Skipping pair. Lack of trimmed meas2")
                 continue            
             
-            # Lists to store correlation results
-            corr_res_list = []
-            interp_pair_list = []
             
             interval_duration_min = (end_ms - start_ms) / 1000 / 60
 
             # Calculate shift1=0 with shift2=0
             if trimmed_meas1_list and trimmed_meas2_list:
-                corr_res, interp_pair = calc_corr_weighted((trimmed_meas1_list, trimmed_meas2_list))
-                if corr_res is not None and interp_pair is not None:
-                    interp_meas1, interp_meas2 = interp_pair
+                corr, p_val, shift_diff, name_meas1, name_meas2, interp_meas1, interp_meas2 = calc_corr_weighted((trimmed_meas1_list, trimmed_meas2_list))
+                if corr is not None and interp_meas1 is not None and interp_meas2 is not None:
                     # Ensure that the duration of each interpolated measurement exceeds MIN_DURATION_RATIO * interval_duration_min
                     if interp_meas1.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO and interp_meas2.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO:
-                        corr_res_list.append(pd.DataFrame([corr_res]))
-                        interp_pair_list.append(interp_pair)                    
+                        final_corr_results.append(
+                            MeasurementRecord(
+                                meas_number = meas_number,
+                                meas_type = meas_type,
+                                pair_number = pair_number,
+                                meas_state = meas_state,
+                                shift_diff = shift_diff,
+                                corr = corr,
+                                p_val = p_val,
+                                name_meas1 = name_meas1,
+                                name_meas2 = name_meas2,
+                                meas1 = interp_meas1,
+                                meas2 = interp_meas2
+                                )
+                            )
             
             # Group trimmed shifted_meas1 by their shift value
             if trimmed_shifted_meas1_list and trimmed_meas2_list:
                 trimmed_shifted_gruped_meas1 = group_meas(trimmed_shifted_meas1_list, ["shift"])
                 
                 # Calculate shift2=0 with every shift1
-                for shift1, meas1_group in trimmed_shifted_gruped_meas1.items():
-                    
-                    if (meas_number == 1 and meas_type=="Cooperation" and pair_number==11 and meas_state=="z1_1_f" and shift1==4.0):
-                        print(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}")
-                    
-                        
-                    corr_res, interp_pair = calc_corr_weighted((meas1_group, trimmed_meas2_list))
-                    if corr_res is not None and interp_pair is not None:
-                        interp_meas1, interp_meas2 = interp_pair
+                for shift1, meas1_group in trimmed_shifted_gruped_meas1.items():                        
+                    corr, p_val, shift_diff, name_meas1, name_meas2, interp_meas1, interp_meas2 = calc_corr_weighted((meas1_group, trimmed_meas2_list))
+                    if corr is not None and interp_meas1 is not None and interp_meas2 is not None:
                         # Ensure that the duration of each interpolated measurement exceeds MIN_DURATION_RATIO * interval_duration_min
                         if interp_meas1.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO and interp_meas2.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO:
-                            corr_res_list.append(pd.DataFrame([corr_res]))
-                            interp_pair_list.append(interp_pair) 
+                            final_corr_results.append(
+                                MeasurementRecord(
+                                    meas_number = meas_number,
+                                    meas_type = meas_type,
+                                    pair_number = pair_number,
+                                    meas_state = meas_state,
+                                    shift_diff = shift_diff,
+                                    corr = corr,
+                                    p_val = p_val,
+                                    name_meas1 = name_meas1,
+                                    name_meas2 = name_meas2,
+                                    meas1 = interp_meas1,
+                                    meas2 = interp_meas2
+                                    )
+                                )
                         
             if trimmed_shifted_meas2_list and trimmed_meas1_list:
                 trimmed_shifted_gruped_meas2 = group_meas(trimmed_shifted_meas2_list, ["shift"])
                 
                 # Calculate shift1=0 with every shift2
                 for shift2, meas2_group in trimmed_shifted_gruped_meas2.items():
-                    corr_res, interp_pair = calc_corr_weighted((trimmed_meas1_list, meas2_group))
-                    if corr_res is not None and interp_pair is not None:
-                        interp_meas1, interp_meas2 = interp_pair
+                    corr, p_val, shift_diff, name_meas1, name_meas2, interp_meas1, interp_meas2 = calc_corr_weighted((trimmed_meas1_list, meas2_group))
+                    if corr is not None and interp_meas1 is not None and interp_meas2 is not None:
                         # Ensure that the duration of each interpolated measurement exceeds MIN_DURATION_RATIO * interval_duration_min
                         if interp_meas1.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO and interp_meas2.metadata.duration_min > interval_duration_min * MIN_DURATION_RATIO:
-                            corr_res_list.append(pd.DataFrame([corr_res]))
-                            interp_pair_list.append(interp_pair) 
-                                     
-            # If correlations were calculated, find the best result
-            if not corr_res_list or not interp_pair_list:
-                logger.warning(f"{meas_number}, {meas_type}, {pair_number}: Skipping pair. Lack of valid correlations")
-            else:
-                corr_res_df = pd.concat(corr_res_list, ignore_index=False)
-                
-                # Find the best correlation result
-                max_abs_corr = corr_res_df['corr'].abs().max()
-                max_corr_rows = corr_res_df[corr_res_df['corr'].abs() == max_abs_corr]
-                
-                # If there are multiple results with the same correlation, choose the one with smallest shift difference
-                if max_corr_rows.shape[0] > 1:
-                    min_shift_index = max_corr_rows['shift_diff'].abs().idxmin()
-                    best_corr_result = max_corr_rows.iloc[min_shift_index]
-                else:
-                    best_corr_result = max_corr_rows.iloc[0]
-                
-                best_corr_result['meas_state'] = meas_state
-                best_corr_result['meas_number'] = meas_number
-                best_corr_result['meas_type'] = meas_type
-                best_corr_result['pair_number'] = pair_number
-                
-                # Find corresponding interp_pair for best_corr_result
-                corr_res_df = corr_res_df.reset_index(drop=True)
-                for idx, row in corr_res_df.iterrows():
-                    if (row['corr'] == best_corr_result['corr']) and (row['shift_diff'] == best_corr_result['shift_diff']):
-                        best_interp_pair = interp_pair_list[idx]
-                        break
+                            final_corr_results.append(
+                                MeasurementRecord(
+                                    meas_number = meas_number,
+                                    meas_type = meas_type,
+                                    pair_number = pair_number,
+                                    meas_state = meas_state,
+                                    shift_diff = shift_diff,
+                                    corr = corr,
+                                    p_val = p_val,
+                                    name_meas1 = name_meas1,
+                                    name_meas2 = name_meas2,
+                                    meas1 = interp_meas1,
+                                    meas2 = interp_meas2
+                                    )
+                                )
 
-                # Save the best correlation result and corresponding interp_pair
-                best_corr_results_list.append(best_corr_result)
-                best_interp_pairs_list.append(best_interp_pair)                    
-                                
-                 # Combine the best results for the current pair
-                if best_corr_results_list:
-                    best_corr_results_df = pd.DataFrame(best_corr_results_list)
-                else:
-                    best_corr_results_df = pd.DataFrame(columns=['meas1', 'meas2', 'corr', 'shift_diff', "meas_number", "meas_type", "pair_number", 'meas_state'])
-            
-        # Append to final results
-        final_corr_results_df = pd.concat([final_corr_results_df, best_corr_results_df], ignore_index=True)
-        final_interp_pairs_list += best_interp_pairs_list
-
-    return final_corr_results_df, final_interp_pairs_list
+    return final_corr_results
 
 #%%
-def save_final_pairs_plots(corr_results: pd.DataFrame, interp_pairs: list[tuple[Meas, Meas]], folder_name: str, title_label: str = "", value_label: str = "Value"):
+def save_final_pairs_plots(measurement_records, folder_name, title_label="", value_label="Value"):
     """
-    Saves the histogram and scatter plots for each interpolated pair of Meas objects in the interp_pairs list
-    and associates them with their corresponding correlation results in corr_results.
+    Saves histogram and scatter plots for each MeasurementRecord, extracting details directly from the records.
 
-    Parameters:
-    -----------
-    corr_results : pd.DataFrame
-        A DataFrame containing correlation results, including measurement state. 
-        Each row represents the correlation data for a specific pair of Meas objects.
-
-    interp_pairs : list[tuple[Meas, Meas]]
-        A list of tuples where each tuple contains two interpolated Meas objects.
-        These pairs are used for generating plots.
-
+    Args:
+    -----
+    measurement_records : list
+        List of MeasurementRecord objects. Each record contains information about correlation results
+        and associated pairs of Meas objects.
+    
     folder_name : str
-        The name of the folder where the generated plots will be saved.
-        This folder should exist within a specific structure defined by the measurement type, number, 
-        and state.
-        
+        Name of the folder where plots will be saved. This folder is organized by measurement type, number,
+        and state within the predefined structure.
+    
     title_label : str, optional
-        A label to be used in the title of the plots. If not provided, a default title will be generated 
-        using the without title_label in titles.
-
+        Label to include in plot titles. Default is an empty string.
+    
     value_label : str, optional
-        A label for the y-axis of the plots. Defaults to "Value", but can be replaced with a more specific 
-        description (e.g., "HR", "RR-interval").
-
+        Label for the y-axis of the plots. Default is "Value".
+    
     Returns:
     --------
     None
     """
-    # Iterate through both corr_results and interp_pairs
-    for idx in range(len(corr_results)):
-        corr_row = corr_results.iloc[idx]
-        plot_meas1, plot_meas2 = interp_pairs[idx]
-
-        # Extract measurement details from the metadata of plot_meas1
-        meas_type = plot_meas1.metadata.meas_type  # Adjust if the attribute name is different
-        meas_number = plot_meas1.metadata.meas_number  # Adjust if the attribute name is different
-        meas_state = corr_row['meas_state']
-
-        # Define the base folder for saving the plots
-        folder_path = PLOTS_DIR / meas_type / str(meas_number) / "intervals" / meas_state / folder_name
+    for record in measurement_records:
+        # Extract details from the MeasurementRecord object
+        meas_type = record.meas_type
+        meas_number = record.meas_number
+        meas_state = record.meas_state
         
-        # Make a deep copy of the Meas objects to avoid modifying the original data
-        plot_meas1_copy = copy.deepcopy(plot_meas1)
-        plot_meas2_copy = copy.deepcopy(plot_meas2)
+        # Define the base folder for saving the plots
+        folder_path = Path(PLOTS_DIR) / meas_type / str(meas_number) / "intervals" / meas_state / folder_name
+
+        # Make deep copies of the Meas objects to avoid modifying original data
+        plot_meas1_copy = copy.deepcopy(record.meas1)
+        plot_meas2_copy = copy.deepcopy(record.meas2)
         
         # Plot and save the histogram and scatter plots
         plot_histogram_pair((plot_meas1_copy, plot_meas2_copy), folder_path, title_label=title_label, value_label=value_label)
         plot_scatter_pair((plot_meas1_copy, plot_meas2_copy), folder_path, title_label=title_label, value_label=value_label)
+
+#%%
+def find_best_results(measurement_records: list[MeasurementRecord]) -> list[MeasurementRecord]:
+    """
+    Finds the best correlation result in each group of MeasurementRecords.
+
+    Args:
+        measurement_records (list[MeasurementRecord]): 
+            List of MeasurementRecord objects to process.
+
+    Returns:
+        list[MeasurementRecord]: List of MeasurementRecords with the highest `corr` in each group.
+    """
+    # Group the records by specified attributes
+    grouped_records = group_object_list(
+        measurement_records, 
+        ["meas_number", "meas_type", "meas_state", "pair_number"]
+    )
+    
+    best_corr_results = []
+    
+    # Iterate over each group and find the record with the highest `corr`
+    for group_key, records in grouped_records.items():
+        # Sort by abs(corr) descending, then by shift_diff ascending
+        best_record = min(
+            records, 
+            key=lambda record: (-abs(record.corr), record.shift_diff)
+        )
+        best_corr_results.append(best_record)
+    
+    return best_corr_results
+
+#%%
+def records_to_dataframe(measurement_records: list[MeasurementRecord]):
+    """
+    Converts a list of MeasurementRecord objects into a DataFrame, excluding Meas objects.
+
+    Args:
+        measurement_records (list):
+            List of MeasurementRecord objects to process.
+
+    Returns:
+        DataFrame: A DataFrame containing non-Meas attributes as columns.
+    """
+    # List to store rows for the DataFrame
+    data_for_df = []
+
+    for record in measurement_records:
+        # Extract attributes into a dictionary, excluding Meas objects
+        record_dict = record.__dict__.copy()  # Get all attributes of the record
+        record_dict.pop('meas1', None)  # Remove meas1
+        record_dict.pop('meas2', None)  # Remove meas2
+        
+        # Append the remaining data to the list
+        data_for_df.append(record_dict)
+    
+    # Convert the data to a DataFrame
+    df = pd.DataFrame(data_for_df)
+    
+    return df
+
+#%%
+def save_corr_heatmap(measurement_records, folder_name, title_label=""):
+    """
+    Groups MeasurementRecords and creates a heatmap for each group where:
+    - Columns are sorted `shift_diff` values.
+    - Rows are `pair_number` as strings.
+    - Values are `corr`, with `NaN` where no data is available.
+
+    Args:
+        measurement_records (list): 
+            List of MeasurementRecord objects to process.
+        folder_name (str): 
+            Name of the folder to save the heatmaps.
+        title_label (str, optional): 
+            Title for the heatmaps. Defaults to "".
+    """
+    # Calculate global vmin and vmax for all records
+    all_corr_values = [record.corr for record in measurement_records if not np.isnan(record.corr)]
+    vmin = min(all_corr_values)
+    vmax = max(all_corr_values)
+
+    # Group the records by specified attributes
+    grouped_records = group_object_list(
+        measurement_records, 
+        ["meas_number", "meas_type", "meas_state"]
+    )
+    
+    # Iterate over each group
+    for group_key, records in grouped_records.items():
+        # Create a dictionary to store data for the DataFrame
+        heatmap_data = defaultdict(lambda: defaultdict(lambda: float('nan')))
+
+        # Populate the dictionary with corr values
+        for record in records:
+            pair_number = str(record.pair_number)
+            shift_diff = record.shift_diff
+            corr = record.corr
+            heatmap_data[pair_number][shift_diff] = corr
+
+        # Convert the nested dictionary to a DataFrame
+        df = pd.DataFrame(heatmap_data).transpose()
+
+        # Sort the columns by `shift_diff` and index by `pair_number`
+        df = df.sort_index(axis=0).sort_index(axis=1)
+        
+        # Prepare data for the heatmap
+        heatmap_array = df.to_numpy()
+        x_labels = list(df.columns)
+        y_labels = list(df.index)
+        
+        # Generate a folder path based on the group key
+        meas_number, meas_type, meas_state = group_key
+        
+        # Define the base folder for saving the plots
+        folder_path = Path(PLOTS_DIR) / meas_type / str(meas_number) / "intervals" / meas_state / folder_name
+
+        # Create directory for heatmap plots if it doesn't exist
+        create_directory(folder_path / 'HEATMAP')
+        
+        # Create the heatmap
+        fig, ax = plt.subplots(figsize=(12, 8))
+        create_heatmap_matplotlib(
+            heatmap_array,
+            ax=ax,
+            axis_props={
+                "x_title": "Shift Diff",
+                "y_title": "Pair Number",
+                "x_ticklabels": x_labels,
+                "y_ticklabels": y_labels,
+                "x_tickangle": 45,
+            },
+            title_props={
+                "text": f"{title_label}",
+                "font_size": 14,
+            },
+            heatmap_props={
+                "vmin": vmin,
+                "vmax": vmax,
+                "cmap": "viridis",
+            },
+        )
+        
+        fig.tight_layout()
+        
+        # Save the plot as an png file
+        file_name = f"heatmap_{meas_number}{meas_type}{meas_state}.png"
+        
+        save_fig_matplotlib(fig, folder_path / 'HEATMAP' / file_name)
+        plt.close('all')
+
 
 #%%
 def calculate_instant_hr(nn_intervals: np.ndarray) -> np.ndarray:
