@@ -96,8 +96,8 @@ RELAXATION_TIME_INTERVALS = {
 }
 
 
-# Define meas_types with measurement type and regex pattern
-MEAS_TYPES = [
+# Define conditions with measurement type and regex pattern
+CONDITIONS = [
     ('Relaxation', r'[12]r.*'),
     ('Baseline', r'[12]w.*\d+_1'),
     ('Cooperation', r'[12]w.*\d+_(?!1)')
@@ -109,18 +109,18 @@ intervals = {
     'RELAXATION': RELAXATION_TIME_INTERVALS
 }
 
-def get_time_intervals(meas_type: str) -> dict:
+def get_time_intervals(condition: str) -> dict:
     """
     Returns the appropriate time intervals based on the measurement type.
     
     Args:
-        meas_type (str): The measurement type, e.g., 'Baseline' or 'Cooperation'.
+        condition (str): The measurement type, e.g., 'Baseline' or 'Cooperation'.
     
     Returns:
         dict: The corresponding dictionary of time intervals.
     """
-    # Create the key name based on meas_number and meas_type
-    key = f"{meas_type.upper()}"
+    # Create the key name based on meas_number and condition
+    key = f"{condition.upper()}"
     
     # Return the appropriate time intervals
     return intervals.get(key, None)

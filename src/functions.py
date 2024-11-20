@@ -24,7 +24,7 @@ from utils.math_utils import fisher_transform
 from utils.matplotlib_utils import save_fig_matplotlib, create_heatmap_matplotlib
 
 #%%
-def assign_meas_type(meas_name: str) -> str:
+def assign_condition(meas_name: str) -> str:
     """
     Assigns a measurement type based on the provided measurement name using predefined regex patterns.
 
@@ -37,10 +37,10 @@ def assign_meas_type(meas_name: str) -> str:
     Raises:
         ValueError: If no matching pattern is found.
     """
-    for meas_type, pattern in MEAS_TYPES:
+    for condition, pattern in CONDITIONS:
         if re.match(pattern, meas_name):
-            return meas_type
-    raise ValueError(f"Could not determine meas_type for '{meas_name}'")
+            return condition
+    raise ValueError(f"Could not determine condition for '{meas_name}'")
 
 #%%
 def extract_data_from_file(file_path):
@@ -112,20 +112,20 @@ def extract_data_from_file(file_path):
     meas_name = splitted_file_name[0]
     meas_number = extract_numeric_prefix(meas_name)
     pair_number = extract_numeric_suffix(meas_name.split('_')[0])
-    meas_type = assign_meas_type(meas_name)
+    condition = assign_condition(meas_name)
     gender = remove_digits(meas_name.split('_')[0])[1]
     gender = 'F' if gender == 'k' else ('M' if gender == 'm' else gender)
 
     logger.info(f"Metadata extracted from filename: "
                 f"meas_number={meas_number}, pair_number={pair_number}, "
-                f"meas_type={meas_type}, gender={gender}.")
+                f"condition={condition}, gender={gender}.")
 
     # Create a new Meas object
     new_meas = Meas(
         x_data=x_data,
         y_data=y_data,
         meas_number=meas_number,
-        meas_type=meas_type,
+        condition=condition,
         gender=gender,
         pair_number=pair_number,
         shift=0.0,  # Assuming shift is 0.0, can be updated as needed
@@ -308,13 +308,13 @@ def meas_plot_from(meas_list: list[Meas], folder_name: str, title_label: str = "
     plot_list = copy.deepcopy(meas_list)
     
     # Group measurements by their type and number
-    grouped_meas = group_meas(plot_list, ["meas_type", "meas_number"])
+    grouped_meas = group_meas(plot_list, ["condition", "meas_number"])
 
     for key, group in grouped_meas.items():
         merged_meas = merge_grouped(group)
 
-        meas_type, meas_number = key
-        folder_path = PLOTS_DIR / meas_type / str(meas_number) / folder_name
+        condition, meas_number = key
+        folder_path = PLOTS_DIR / condition / str(meas_number) / folder_name
 
         # Create directories for saving plots
         create_directory(folder_path / 'HISTOGRAM')
@@ -455,11 +455,11 @@ def pair_plots_from(meas_list: list[Meas], folder_name: str, title_label: str = 
     
     plot_list = copy.deepcopy(meas_list)
     
-    grouped_meas = group_meas(meas_list, ["meas_number", "meas_type", "pair_number"])
+    grouped_meas = group_meas(meas_list, ["meas_number", "condition", "pair_number"])
 
     # Iterate over each group of measurements
     for key, group in grouped_meas.items():      
-        meas_number, meas_type, pair_number = key
+        meas_number, condition, pair_number = key
         
         person_meas1 = [meas for meas in group if meas.metadata.gender == 'M']
         person_meas2 = [meas for meas in group if meas.metadata.gender == 'F']
@@ -467,7 +467,7 @@ def pair_plots_from(meas_list: list[Meas], folder_name: str, title_label: str = 
         plot_meas1 = merge_meas(person_meas1)
         plot_meas2 = merge_meas(person_meas2)
         
-        folder_path = PLOTS_DIR / meas_type / str(meas_number) / folder_name
+        folder_path = PLOTS_DIR / condition / str(meas_number) / folder_name
 
         plot_histogram_pair((plot_meas1, plot_meas2), folder_path, title_label=title_label, value_label=value_label)
         plot_scatter_pair((plot_meas1, plot_meas2), folder_path, title_label=title_label, value_label=value_label)
@@ -480,7 +480,7 @@ def find_meas(meas_list: list['Meas'], **criteria) -> list['Meas']:
     Args:
         meas_list (list[Meas]): List of Meas objects to search.
         **criteria: Key-value pairs of Meas attributes to filter by.
-            For example: meas_number=1, gender='M', meas_type='Baseline'.
+            For example: meas_number=1, gender='M', condition='Baseline'.
     
     Returns:
         list[Meas]: A list of Meas objects that match the given criteria.
@@ -557,7 +557,7 @@ def merge_meas(meas_list: list['Meas']) -> 'Meas':
     # Create a deep copy of the list to avoid modifying the original objects
     meas_to_merge = copy.deepcopy(meas_list)
 
-    if not validate_meas_metadata(meas_list, ["gender", "meas_number", "meas_type", "pair_number", "shift"]):
+    if not validate_meas_metadata(meas_list, ["gender", "meas_number", "condition", "pair_number", "shift"]):
         raise ValueError(f"Validation MEAS_LIST failed in merge_meas function") 
                 
     # Sort the group by starttime to ensure younger is added to older
@@ -639,7 +639,7 @@ def merge_grouped(meas_list: list['Meas']) -> list['Meas']:
     """
     
     # Group Meas objects by relevant metadata fields
-    grouped_meas = group_meas(meas_list, ["gender", "meas_number", "meas_type", "pair_number", "shift"])
+    grouped_meas = group_meas(meas_list, ["gender", "meas_number", "condition", "pair_number", "shift"])
     
     merged_meas_list = []
     
@@ -1025,21 +1025,21 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
     
     final_corr_results = []
     
-    grouped_meas = group_meas(meas_list, ["meas_number", "meas_type", "pair_number"])
+    grouped_meas = group_meas(meas_list, ["meas_number", "condition", "pair_number"])
 
     # Iterate over each group of measurements
     for key, group in grouped_meas.items():      
-        meas_number, meas_type, pair_number = key
+        meas_number, condition, pair_number = key
                 
         person_meas1 = [meas for meas in group if meas.metadata.gender == 'M']
         person_meas2 = [meas for meas in group if meas.metadata.gender == 'F']
         
         if not person_meas1 or not person_meas2:
-            logger.warning(f"{meas_number}, {meas_type}, {pair_number}: Skipping pair. Lack of meas1 or meas2.")
+            logger.warning(f"{meas_number}, {condition}, {pair_number}: Skipping pair. Lack of meas1 or meas2.")
             continue
             
         # Get time intervals for the given measurement type
-        selected_intervals = get_time_intervals(meas_type)
+        selected_intervals = get_time_intervals(condition)
         
         # Find the oldest starttime among all measurements in the pair
         oldest_starttime = min(meas.metadata.starttime for meas in group)
@@ -1064,7 +1064,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
         
         
         # Iterate through the selected time intervals
-        for (start_ms, end_ms), meas_state in selected_intervals.items():
+        for (start_ms, end_ms), task in selected_intervals.items():
                             
             # Calculate the time bounds for selecting based on oldest_starttime
             lower_bound = oldest_starttime + pd.Timedelta(milliseconds=start_ms)
@@ -1087,7 +1087,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
                 try:
                     tm1 = trim_meas(loop_meas1, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {condition}, {pair_number}, {task}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
                     continue
                 trimmed_meas1_list.append(tm1)
             
@@ -1095,7 +1095,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
                 try:
                     tm2 = trim_meas(loop_meas2, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {condition}, {pair_number}, {task}: Trimming meas to interval faild. Skipping meas due to invalid time range: {e}")
                     continue
                 trimmed_meas2_list.append(tm2)
                 
@@ -1103,7 +1103,7 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
                 try:
                     tsm1 = trim_meas(loop_meas1, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {condition}, {pair_number}, {task}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
                     continue
                 trimmed_shifted_meas1_list.append(tsm1)
 
@@ -1111,16 +1111,16 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
                 try:
                     tsm2 = trim_meas(loop_meas2, start_ms, end_ms, starttime=oldest_starttime)
                 except ValueError as e:
-                    logger.info(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
+                    logger.info(f"{meas_number}, {condition}, {pair_number}, {task}: Trimming shifted meas to interval faild. Skipping shifted meas due to invalid time range: {e}")
                     continue
                 trimmed_shifted_meas2_list.append(tsm2)
                 
             if not trimmed_meas1_list and not trimmed_shifted_meas1_list:
-                logger.warning(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Skipping pair. Lack of trimmed meas1")
+                logger.warning(f"{meas_number}, {condition}, {pair_number}, {task}: Skipping pair. Lack of trimmed meas1")
                 continue
             
             if not trimmed_meas2_list and not trimmed_shifted_meas2_list:
-                logger.warning(f"{meas_number}, {meas_type}, {pair_number}, {meas_state}: Skipping pair. Lack of trimmed meas2")
+                logger.warning(f"{meas_number}, {condition}, {pair_number}, {task}: Skipping pair. Lack of trimmed meas2")
                 continue            
             
             
@@ -1135,9 +1135,9 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
                         final_corr_results.append(
                             MeasurementRecord(
                                 meas_number = meas_number,
-                                meas_type = meas_type,
+                                condition = condition,
                                 pair_number = pair_number,
-                                meas_state = meas_state,
+                                task = task,
                                 shift_diff = shift_diff,
                                 corr = corr,
                                 p_val = p_val,
@@ -1161,9 +1161,9 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
                             final_corr_results.append(
                                 MeasurementRecord(
                                     meas_number = meas_number,
-                                    meas_type = meas_type,
+                                    condition = condition,
                                     pair_number = pair_number,
-                                    meas_state = meas_state,
+                                    task = task,
                                     shift_diff = shift_diff,
                                     corr = corr,
                                     p_val = p_val,
@@ -1186,9 +1186,9 @@ def process_meas_and_find_corr(meas_list: list[Meas]) -> list[MeasurementRecord]
                             final_corr_results.append(
                                 MeasurementRecord(
                                     meas_number = meas_number,
-                                    meas_type = meas_type,
+                                    condition = condition,
                                     pair_number = pair_number,
-                                    meas_state = meas_state,
+                                    task = task,
                                     shift_diff = shift_diff,
                                     corr = corr,
                                     p_val = p_val,
@@ -1228,12 +1228,12 @@ def save_final_pairs_plots(measurement_records, folder_name, title_label="", val
     """
     for record in measurement_records:
         # Extract details from the MeasurementRecord object
-        meas_type = record.meas_type
+        condition = record.condition
         meas_number = record.meas_number
-        meas_state = record.meas_state
+        task = record.task
         
         # Define the base folder for saving the plots
-        folder_path = Path(PLOTS_DIR) / meas_type / str(meas_number) / "intervals" / meas_state / folder_name
+        folder_path = Path(PLOTS_DIR) / condition / str(meas_number) / "intervals" / task / folder_name
 
         # Make deep copies of the Meas objects to avoid modifying original data
         plot_meas1_copy = copy.deepcopy(record.meas1)
@@ -1258,7 +1258,7 @@ def find_best_results(measurement_records: list[MeasurementRecord]) -> list[Meas
     # Group the records by specified attributes
     grouped_records = group_object_list(
         measurement_records, 
-        ["meas_number", "meas_type", "meas_state", "pair_number"]
+        ["meas_number", "condition", "task", "pair_number"]
     )
     
     best_corr_results = []
@@ -1300,98 +1300,14 @@ def records_to_dataframe(measurement_records: list[MeasurementRecord]):
     
     # Convert the data to a DataFrame
     df = pd.DataFrame(data_for_df)
+    # Replace specific measurement types with single letters
+    df['condition'] = df['condition'].map({
+        'Cooperation': 'C',
+        'Baseline': 'C',
+        'Relaxation': 'R'
+    })
     
     return df
-
-#%%
-def save_corr_heatmap(measurement_records, folder_name, title_label=""):
-    """
-    Groups MeasurementRecords and creates a heatmap for each group where:
-    - Columns are sorted `shift_diff` values.
-    - Rows are `pair_number` as strings.
-    - Values are `corr`, with `NaN` where no data is available.
-
-    Args:
-        measurement_records (list): 
-            List of MeasurementRecord objects to process.
-        folder_name (str): 
-            Name of the folder to save the heatmaps.
-        title_label (str, optional): 
-            Title for the heatmaps. Defaults to "".
-    """
-    # Calculate global vmin and vmax for all records
-    all_corr_values = [record.corr for record in measurement_records if not np.isnan(record.corr)]
-    vmin = min(all_corr_values)
-    vmax = max(all_corr_values)
-
-    # Group the records by specified attributes
-    grouped_records = group_object_list(
-        measurement_records, 
-        ["meas_number", "meas_type", "meas_state"]
-    )
-    
-    # Iterate over each group
-    for group_key, records in grouped_records.items():
-        # Create a dictionary to store data for the DataFrame
-        heatmap_data = defaultdict(lambda: defaultdict(lambda: float('nan')))
-
-        # Populate the dictionary with corr values
-        for record in records:
-            pair_number = str(record.pair_number)
-            shift_diff = record.shift_diff
-            corr = record.corr
-            heatmap_data[pair_number][shift_diff] = corr
-
-        # Convert the nested dictionary to a DataFrame
-        df = pd.DataFrame(heatmap_data).transpose()
-
-        # Sort the columns by `shift_diff` and index by `pair_number`
-        df = df.sort_index(axis=0).sort_index(axis=1)
-        
-        # Prepare data for the heatmap
-        heatmap_array = df.to_numpy()
-        x_labels = list(df.columns)
-        y_labels = list(df.index)
-        
-        # Generate a folder path based on the group key
-        meas_number, meas_type, meas_state = group_key
-        
-        # Define the base folder for saving the plots
-        folder_path = Path(PLOTS_DIR) / meas_type / str(meas_number) / "intervals" / meas_state / folder_name
-
-        # Create directory for heatmap plots if it doesn't exist
-        create_directory(folder_path / 'HEATMAP')
-        
-        # Create the heatmap
-        fig, ax = plt.subplots(figsize=(12, 8))
-        create_heatmap_matplotlib(
-            heatmap_array,
-            ax=ax,
-            axis_props={
-                "x_title": "Shift Diff",
-                "y_title": "Pair Number",
-                "x_ticklabels": x_labels,
-                "y_ticklabels": y_labels,
-                "x_tickangle": 45,
-            },
-            title_props={
-                "text": f"{title_label}",
-                "font_size": 14,
-            },
-            heatmap_props={
-                "vmin": vmin,
-                "vmax": vmax,
-                "cmap": "viridis",
-            },
-        )
-        
-        fig.tight_layout()
-        
-        # Save the plot as an png file
-        file_name = f"heatmap_{meas_number}{meas_type}{meas_state}.png"
-        
-        save_fig_matplotlib(fig, folder_path / 'HEATMAP' / file_name)
-        plt.close('all')
 
 
 #%%
@@ -1628,4 +1544,175 @@ def calculate_overlapping_rmssd_meas(meas_list: list[Meas], window_ms: float, ov
         calculate_overlapping_rmssd(meas, window_ms=window_ms, overlap=overlap, min_fraction=min_fraction)
     
     return rmssd_meas_list
+
+#%%
+def save_corr_heatmap_by_pair_and_shift(df, folder_name, title_label=""):
+    """
+    Creates a heatmap for each group of records in the DataFrame where:
+    - Columns are sorted `shift_diff` values.
+    - Rows are `pair_number` as strings, sorted numerically.
+    - Values are `corr`, with `NaN` where no data is available.
+
+    Args:
+        df (pd.DataFrame): 
+            DataFrame containing the data with columns:
+            ['meas_number', 'condition', 'task', 'pair_number', 'shift_diff', 'corr'].
+        folder_name (str): 
+            Name of the folder to save the heatmaps.
+        title_label (str, optional): 
+            Title for the heatmaps. Defaults to "".
+    """
+    # Ensure necessary columns exist
+    required_columns = {'meas_number', 'condition', 'task', 'pair_number', 'shift_diff', 'corr'}
+    if not required_columns.issubset(df.columns):
+        raise ValueError(f"DataFrame must contain columns: {required_columns}")
+
+    # Calculate global vmin and vmax for all records
+    all_corr_values = df['corr'].dropna()
+    vmin, vmax = all_corr_values.min(), all_corr_values.max()
+
+    # Group the records by `meas_number`, `condition`, and `task`
+    grouped_records = df.groupby(['meas_number', 'condition', 'task'])
+
+    # Iterate over each group
+    for group_key, group_df in grouped_records:
+        # Pivot the DataFrame to create the heatmap data
+        heatmap_data = group_df.pivot(index='pair_number', columns='shift_diff', values='corr')
+
+        # Ensure the index and columns are sorted
+        heatmap_data = heatmap_data.sort_index(axis=0, key=lambda x: pd.to_numeric(x, errors='coerce'))  # Sort Y (pair_number) numerically
+        heatmap_data = heatmap_data.sort_index(axis=1)  # Sort X (shift_diff) naturally
+
+        # Prepare data for the heatmap
+        heatmap_array = heatmap_data.to_numpy()
+        x_labels = heatmap_data.columns.tolist()
+        y_labels = heatmap_data.index.tolist()
+
+        # Extract group keys for file naming
+        meas_number, condition, task = group_key
+
+        # Generate folder path
+        folder_path = Path(PLOTS_DIR) / 'HEATMAPS' / folder_name / "pair_and_shift"
+        create_directory(folder_path)
+
+        # Create the heatmap
+        fig, ax = plt.subplots(figsize=(12, 8))
+        create_heatmap_matplotlib(
+            heatmap_array,
+            ax=ax,
+            axis_props={
+                "x_title": "Shift Diff",
+                "y_title": "Pair Number",
+                "x_ticklabels": x_labels,
+                "y_ticklabels": y_labels,
+                "x_tickangle": 45,
+            },
+            title_props={
+                "text": f"{title_label} ({meas_number}, {condition}, {task})",
+                "font_size": 14,
+            },
+            heatmap_props={
+                "vmin": vmin,
+                "vmax": vmax,
+                "cmap": "viridis",
+            },
+        )
+
+        fig.tight_layout()
+
+        # Save the plot as a PNG file
+        file_name = f"{meas_number}_{condition}_{task}.png"
+        save_fig_matplotlib(fig, folder_path / file_name)
+        plt.close('all')
+
+
+#%%
+def save_corr_heatmap_by_task_and_shift(df, folder_name, title_label=""):
+    """
+    Creates a heatmap for each group of records in the DataFrame where:
+    - Columns are sorted `shift_diff` values.
+    - Rows are `task` values, sorted by a predefined `task_order`.
+    - Values are `corr`, with `NaN` where no data is available.
+
+    Args:
+        df (pd.DataFrame): 
+            DataFrame containing the data with columns:
+            ['meas_number', 'condition', 'pair_number', 'task', 'shift_diff', 'corr'].
+        folder_name (str): 
+            Name of the folder to save the heatmaps.
+        title_label (str, optional): 
+            Title for the heatmaps. Defaults to "".
+    """
+    # Ensure necessary columns exist
+    required_columns = {'meas_number', 'condition', 'pair_number', 'task', 'shift_diff', 'corr'}
+    if not required_columns.issubset(df.columns):
+        raise ValueError(f"DataFrame must contain columns: {required_columns}")
+
+    # Define the task order for sorting
+    task_order = [
+        "baseline1",
+        "z",
+        "z1", "z1_1_f", "z1_2_m", "z1_3_f", "z1_4_m", "z1_5_f", "z1_6_m",
+        "z2", "z2_1_m", "z2_2_f", "z2_3_m", "z2_4_f", "z2_5_m", "z2_6_f",
+        "baseline2"
+    ]
+
+    # Calculate global vmin and vmax for the heatmap
+    all_corr_values = df['corr'].dropna()
+    vmin, vmax = all_corr_values.min(), all_corr_values.max()
+
+    # Group the records by `meas_number`, `condition`, and `pair_number`
+    grouped_records = df.groupby(['meas_number', 'condition', 'pair_number'])
+    
+    for group_key, group_df in grouped_records:
+        # Pivot the DataFrame to create the heatmap data
+        heatmap_data = group_df.pivot(index='task', columns='shift_diff', values='corr')
+
+        # Sort rows (tasks) according to the predefined order
+        heatmap_data = heatmap_data.reindex(index=task_order).dropna(how='all', axis=0)
+
+        # Sort columns (shift_diff) by natural order
+        heatmap_data = heatmap_data.sort_index(axis=1)
+
+        # Prepare data for the heatmap
+        heatmap_array = heatmap_data.to_numpy()
+        x_labels = heatmap_data.columns.tolist()
+        y_labels = heatmap_data.index.tolist()
+        
+        # Extract group keys for file naming
+        meas_number, condition, pair_number = group_key
+
+        # Generate folder path
+        folder_path = Path(PLOTS_DIR) / 'HEATMAPS' / folder_name / "task_and_shift"
+        create_directory(folder_path)
+
+        # Create the heatmap
+        fig, ax = plt.subplots(figsize=(12, 8))
+        create_heatmap_matplotlib(
+            heatmap_array,
+            ax=ax,
+            axis_props={
+                "x_title": "Shift Diff",
+                "y_title": "Task",
+                "x_ticklabels": x_labels,
+                "y_ticklabels": y_labels,
+                "x_tickangle": 45,
+            },
+            title_props={
+                "text": f"{title_label} ({meas_number}, {condition}, {pair_number})",
+                "font_size": 14,
+            },
+            heatmap_props={
+                "vmin": vmin,
+                "vmax": vmax,
+                "cmap": "viridis",
+            },
+        )
+
+        fig.tight_layout()
+
+        # Save the plot as a PNG file
+        file_name = f"{meas_number}_{condition}_{pair_number}.png"
+        save_fig_matplotlib(fig, folder_path / file_name)
+        plt.close('all')
 

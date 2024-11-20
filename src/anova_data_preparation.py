@@ -24,6 +24,7 @@ regex_patterns = {
 
 task_order = [
     "baseline1",
+    "z",
     "z1", "z1_1_f", "z1_2_m", "z1_3_f", "z1_4_m", "z1_5_f", "z1_6_m",
     "z2", "z2_1_m", "z2_2_f", "z2_3_m", "z2_4_f", "z2_5_m", "z2_6_f",
     "baseline2"
@@ -112,7 +113,7 @@ def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
     """
 
     # Check if necessary columns are present in the DataFrame
-    required_columns = ['meas1', 'meas2', 'meas_number', 'meas_type', 'pair_number', 'meas_state', value]
+    required_columns = ['meas1', 'meas2', 'meas_number', 'condition', 'pair_number', 'task', value]
     for column in required_columns:
         if column not in df.columns:
             raise ValueError(f"Missing required column: {column}")
@@ -123,7 +124,7 @@ def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
     df['pair_number'] = df['pair_number'].astype(int)
 
     # Replace specific measurement types with single letters
-    df['meas_type'] = df['meas_type'].map({
+    df['condition'] = df['condition'].map({
         'Cooperation': 'C',
         'Baseline': 'C',
         'Relaxation': 'R'
@@ -131,7 +132,7 @@ def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
 
     # Create a pivot table based on the specified value
     result = df.pivot_table(index='pair_number', 
-                             columns=['meas_number', 'meas_type', 'meas_state'], 
+                             columns=['meas_number', 'condition', 'task'], 
                              values=value,  # Use 'value' as specified to pull correct column data
                              aggfunc='first')  # Use 'first' or another aggregation function as needed
 

@@ -23,7 +23,7 @@ git clone https://github.com/Hubert26/python-utils.git
 ### 2. Create and Activate the Environment
 + Navigate to the swps_synchronization_study project directory:
 ```
-cd swps_synchronization_study
+cd /path/to/swps_synchronization_study
 ```
 + Create the Conda environment from the `environment.yml` file:
 ```

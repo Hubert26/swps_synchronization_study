@@ -93,7 +93,7 @@ class Data:
 #%%
 class Metadata:
     meas_number: int
-    meas_type: str
+    condition: str
     gender: str
     pair_number: int
     shift: float = field(default=0.0)
@@ -101,12 +101,12 @@ class Metadata:
     endtime: datetime
     duration_min: float
 
-    def __init__(self, meas_number: int, meas_type: str, gender: str, pair_number: int, shift: float, starttime: datetime, endtime: datetime):
+    def __init__(self, meas_number: int, condition: str, gender: str, pair_number: int, shift: float, starttime: datetime, endtime: datetime):
         # Type checking for initialization
         if not isinstance(meas_number, int):
             raise TypeError(f"meas_number must be an int, got {type(meas_number)} instead.")
-        if not isinstance(meas_type, str):
-            raise TypeError(f"meas_type must be a string, got {type(meas_type)} instead.")
+        if not isinstance(condition, str):
+            raise TypeError(f"condition must be a string, got {type(condition)} instead.")
         if not isinstance(gender, str):
             raise TypeError(f"gender must be a string, got {type(gender)} instead.")
         if not isinstance(pair_number, int):
@@ -119,7 +119,7 @@ class Metadata:
             raise TypeError(f"endtime must be a datetime object, got {type(endtime)} instead.")
 
         self.meas_number = meas_number
-        self.meas_type = meas_type
+        self.condition = condition
         self.gender = gender
         self.pair_number = pair_number
         self.shift = float(shift)  # Convert int to float if needed
@@ -131,7 +131,7 @@ class Metadata:
         # Automatically calculate duration in minutes
         self.duration_min = (self.endtime - self.starttime).total_seconds() / 60.0
 
-    def update(self, new_meas_number: int = None, new_meas_type: str = None, new_gender: str = None, new_pair_number: int = None, new_shift: float = None,
+    def update(self, new_meas_number: int = None, new_condition: str = None, new_gender: str = None, new_pair_number: int = None, new_shift: float = None,
                new_starttime: datetime = None, new_endtime: datetime = None):
         """Updates the metadata attributes with type checking."""
         if new_meas_number is not None:
@@ -139,10 +139,10 @@ class Metadata:
                 raise TypeError(f"new_meas_number must be an int, got {type(new_meas_number)} instead.")
             self.meas_number = new_meas_number
             
-        if new_meas_type is not None:
-            if not isinstance(new_meas_type, str):
-                raise TypeError(f"new_meas_type must be a string, got {type(new_meas_type)} instead.")
-            self.meas_type = new_meas_type
+        if new_condition is not None:
+            if not isinstance(new_condition, str):
+                raise TypeError(f"new_condition must be a string, got {type(new_condition)} instead.")
+            self.condition = new_condition
 
         if new_gender is not None:
             if not isinstance(new_gender, str):
@@ -173,7 +173,7 @@ class Metadata:
         self.__post_init__()
 
     def __repr__(self):
-        return (f"Metadata(meas_number={self.meas_number!r}, meas_type={self.meas_type!r}, gender={self.gender!r}, pair_number={self.pair_number!r}, "
+        return (f"Metadata(meas_number={self.meas_number!r}, condition={self.condition!r}, gender={self.gender!r}, pair_number={self.pair_number!r}, "
                 f"shift={self.shift}, starttime={self.starttime}, "
                 f"endtime={self.endtime}, duration_min={self.duration_min})")
 
@@ -182,9 +182,9 @@ class Meas:
     data: Data
     metadata: Metadata
     
-    def __init__(self, x_data: np.ndarray, y_data: np.ndarray, meas_number: int, meas_type: str, gender: str, pair_number: int, shift: float, starttime: datetime, endtime: datetime):
+    def __init__(self, x_data: np.ndarray, y_data: np.ndarray, meas_number: int, condition: str, gender: str, pair_number: int, shift: float, starttime: datetime, endtime: datetime):
         self.data = Data(x_data, y_data)
-        self.metadata = Metadata(meas_number, meas_type, gender, pair_number, shift, starttime, endtime)
+        self.metadata = Metadata(meas_number, condition, gender, pair_number, shift, starttime, endtime)
         
     def __add__(self, other: 'Meas') -> 'Meas':
         """
@@ -196,7 +196,7 @@ class Meas:
 
         # Ensure metadata fields are the same
         if (self.metadata.meas_number != other.metadata.meas_number or
-            self.metadata.meas_type != other.metadata.meas_type or
+            self.metadata.condition != other.metadata.condition or
             self.metadata.gender != other.metadata.gender or
             self.metadata.pair_number != other.metadata.pair_number or
             self.metadata.shift != other.metadata.shift):
@@ -218,7 +218,7 @@ class Meas:
             x_data=new_x_data,
             y_data=new_y_data,
             meas_number=self.metadata.meas_number,
-            meas_type=self.metadata.meas_type,
+            condition=self.metadata.condition,
             gender=self.metadata.gender,
             pair_number=self.metadata.pair_number,
             shift=self.metadata.shift,
@@ -230,20 +230,20 @@ class Meas:
         """Updates the x_data and/or y_data arrays."""
         self.data.update(new_x_data, new_y_data)
         
-    def update_metadata(self, new_meas_number: int = None, new_meas_type: str = None, new_gender: str = None, new_pair_number: int = None, new_shift: float = None,
+    def update_metadata(self, new_meas_number: int = None, new_condition: str = None, new_gender: str = None, new_pair_number: int = None, new_shift: float = None,
                new_starttime: datetime = None, new_endtime: datetime = None):
         """Updates the metadata attributes."""
-        self.metadata.update(new_meas_number, new_meas_type, new_gender, new_pair_number, new_shift, new_starttime, new_endtime)
+        self.metadata.update(new_meas_number, new_condition, new_gender, new_pair_number, new_shift, new_starttime, new_endtime)
 
     def update(self, new_x_data: np.ndarray = None, new_y_data: np.ndarray = None,
-               new_meas_number: int = None, new_meas_type: str = None, new_gender: str = None, new_pair_number: int = None, new_shift: float = None,
+               new_meas_number: int = None, new_condition: str = None, new_gender: str = None, new_pair_number: int = None, new_shift: float = None,
                new_starttime: datetime = None, new_endtime: datetime = None):
         """
         Updates both data and metadata. Allows None values to be passed and only updates
         the attributes that are not None.
         """
         self.update_data(new_x_data, new_y_data)
-        self.update_metadata(new_meas_number, new_meas_type, new_gender, new_pair_number, new_shift, new_starttime, new_endtime)
+        self.update_metadata(new_meas_number, new_condition, new_gender, new_pair_number, new_shift, new_starttime, new_endtime)
         
     def trim(self, start: float, end: float):
         """
@@ -294,15 +294,15 @@ class Meas:
         return f"Meas(data={self.data!r}, metadata={self.metadata!r})"
     
     def __str__(self):
-        return f"{self.metadata.meas_number}{self.metadata.meas_type}{self.metadata.gender}{self.metadata.pair_number}_{self.metadata.shift}"
+        return f"{self.metadata.meas_number}{self.metadata.condition}{self.metadata.gender}{self.metadata.pair_number}_{self.metadata.shift}"
 
 #%%
 @dataclass
 class MeasurementRecord:
     meas_number: int
-    meas_type: str
+    condition: str
     pair_number: int
-    meas_state: str
+    task: str
     shift_diff: float
     corr: float
     p_val: float
