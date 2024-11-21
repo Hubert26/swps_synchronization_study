@@ -97,8 +97,6 @@ Correlation results are stored in pandas DataFrames, allowing for the identifica
 
 The project is organized into several directories and files, each serving a specific purpose to facilitate the synchronization study analysis. The main directory `src/` contains the source code and is subdivided into various modules:
 
-- `utils/`: This directory includes utility modules such as `dataframe_utils.py`, `file_utils.py`, `math_utils.py`, `signal_utils.py`, `plotly_utils.py`, and `string_utils.py`, providing essential functions for data manipulation, mathematical operations, plotting, and more.
-
 - `classes.py`: This file defines the core classes used throughout the project, including `Data`, `Metadata`, and `Meas`, which encapsulate the data structures necessary for managing the time signals data.
 
 - `main.py`: This is the entry point of the application where the main logic for data processing and analysis is executed.
