@@ -113,7 +113,7 @@ def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
     """
 
     # Check if necessary columns are present in the DataFrame
-    required_columns = ['meas1', 'meas2', 'meas_number', 'condition', 'pair_number', 'task', value]
+    required_columns = ['name_meas1', 'name_meas2', 'meas_number', 'condition', 'pair_number', 'task', value]
     for column in required_columns:
         if column not in df.columns:
             raise ValueError(f"Missing required column: {column}")
@@ -122,13 +122,6 @@ def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
 
     # Convert 'pair' to numeric type
     df['pair_number'] = df['pair_number'].astype(int)
-
-    # Replace specific measurement types with single letters
-    df['condition'] = df['condition'].map({
-        'Cooperation': 'C',
-        'Baseline': 'C',
-        'Relaxation': 'R'
-    })
 
     # Create a pivot table based on the specified value
     result = df.pivot_table(index='pair_number', 
