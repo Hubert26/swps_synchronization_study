@@ -39,6 +39,7 @@ conda activate swps_synchronization_study_env
 + Any changes to the `python-utils` project will reflect automatically in this setup because of the editable installation.
 
 ## Key Features
+<img src="https://github.com/Hubert26/swps_synchronization_study/blob/main/images/swps_synchronization_study_v2.svg" alt="Program workflow" width="500">
 
 ### Data Loading
 The project starts by importing and preprocessing signal data from specific directories. Measurements are categorized by type and number, with each filename containing key metadata, such as:
