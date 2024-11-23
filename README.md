@@ -39,7 +39,8 @@ conda activate swps_synchronization_study_env
 + Any changes to the `python-utils` project will reflect automatically in this setup because of the editable installation.
 
 ## Key Features
-<img src="https://github.com/Hubert26/swps_synchronization_study/blob/main/images/swps_synchronization_study_v2.svg" alt="Program workflow" width="500">
+**Project Workflow**
+<img src="https://github.com/Hubert26/swps_synchronization_study/blob/main/images/swps_synchronization_study_v2.svg" alt="Program workflow" width="300">
 
 ### Data Loading
 The project starts by importing and preprocessing signal data from specific directories. Measurements are categorized by type and number, with each filename containing key metadata, such as:
@@ -57,11 +58,9 @@ Heart rate data can often contain artifacts, such as missed or erroneously regis
 + Removal of Outliers: Initially, RR intervals that fall outside the range of [−3×standard deviation,+3×standard deviation] are removed from the dataset. This step helps to eliminate extreme values that could distort the analysis.
 + Correction of Ectopic Beats: The second step involves identifying and removing ectopic heartbeats—those that occur prematurely in the cardiac cycle and are not triggered by the sinoatrial node but rather by spontaneous contractions of the heart muscle. A current RR interval RR[i] is considered ectopic and removed if it differs by more than 20% from the previous interval RR[i−1].
 
-**Oryginal and Filtered Histograms**
-![Sample pair histogram of RR signals](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/rr_hist_image.png
-"Sample pair histogram of RR signals")
-![Sample pair histogram of NN signals](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/nn_hist_image.png
-"Sample pair histogram of NN signals")
+**Normal-to-Normal Intervals (NN):**
+Normal-to-Normal Intervals are the regular heart beats intervals that occur during normal sinus rhythm and follow a normal pattern without irregularities or arrhythmias.
+![Sample of interpolated NN Intervals durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/nn_image.png
 
 ### Signal Processing of NN Intervals into Different Metrics
 + **Instant Heart Rate (HR):** Calculated by converting NN intervals to beats per minute (BPM), providing an immediate measure of heart rate.
@@ -92,7 +91,7 @@ Occasionally, participants experience interruptions in data recording. When such
 Robust validation procedures are implemented to ensure that only valid and meaningful data are utilized for correlation analysis. Invalid inputs, such as incomplete time ranges or missing data, are logged, and the system automatically skips over problematic datasets.
 
 ### Results Handling
-Correlation results are stored in pandas DataFrames, allowing for the identification of the best correlation for each time-shifted pair. The results, including the strongest correlations and their respective time shifts, are saved for further statistical analysis and interpretation.
+All correlation results are saved in an XLSX files for comprehensive analysis. Heatmaps are generated from these results to visualize the strength of correlations across time shifts, tasks and pairs. Additionally, the data is processed to create a structured dataset suitable for conducting ANOVA, enabling in-depth statistical evaluation and interpretation of the findings.
 
 ## Code Structure
 
