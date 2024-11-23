@@ -40,6 +40,7 @@ conda activate swps_synchronization_study_env
 
 ## Key Features
 **Project Workflow**
+
 <img src="https://github.com/Hubert26/swps_synchronization_study/blob/main/images/swps_synchronization_study_v2.svg" alt="Program workflow" width="300">
 
 ### Data Loading
@@ -60,7 +61,9 @@ Heart rate data can often contain artifacts, such as missed or erroneously regis
 
 **Normal-to-Normal Intervals (NN):**
 Normal-to-Normal Intervals are the regular heart beats intervals that occur during normal sinus rhythm and follow a normal pattern without irregularities or arrhythmias.
+
 ![Sample of interpolated NN Intervals durring first series of tasks](https://github.com/Hubert26/swps_synchronization_study/blob/main/images/nn_image.png
+"Sample of interpolated NN Intervals durring first series of tasks")
 
 ### Signal Processing of NN Intervals into Different Metrics
 + **Instant Heart Rate (HR):** Calculated by converting NN intervals to beats per minute (BPM), providing an immediate measure of heart rate.
