@@ -1,4 +1,4 @@
-# Signal Data Processing and Correlation Analysis
+# Signal Synchrony Analysis Based on Polar H10 and Elite HRV
 ___
 ## Project Overview
 This project focuses on the analysis of heart rate (HR) data collected using the Polar H10 chest strap and the Elite HRV mobile app. The Polar H10 is a high-precision heart rate monitor, while the Elite HRV app provides tools for tracking HR variability and overall health.
