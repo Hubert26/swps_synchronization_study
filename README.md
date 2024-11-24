@@ -1,4 +1,4 @@
-# Signal Data Processing and Correlation Analysis
+# Signal Synchrony Analysis Based on Polar H10 and Elite HRV
 ___
 ## Project Overview
 This project focuses on the analysis of signal data by calculating weighted correlations between pairs of measurements, with a special emphasis on heart rate signals. The methodology includes data loading, filtering, merging, and aligning of signals to assess the relationships between time-shifted measurements across various intervals.
