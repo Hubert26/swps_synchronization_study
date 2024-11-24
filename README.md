@@ -8,17 +8,17 @@ This project focuses on the analysis of signal data by calculating weighted corr
 To set up the `swps_synchronization_study` project, ensure that you have Conda installed and follow these steps:
 
 ### 1. Clone the Required Repositories
-Clone both the `swps_synchronization_study` and `python-utils` repositories to your local machine. Ensure that both repositories are placed in the same parent directory to allow proper linking of the python-utils package.
+Clone both the `swps_synchronization_study` and `python-data-analysis-utils` repositories to your local machine. Ensure that both repositories are placed in the same parent directory to allow proper linking of the `python-data-analysis-utils` package.
 Example directory structure:
 ```
 parent_directory/
 ├── swps_synchronization_study/
-├── python-utils/
+├── python-data-analysis-utils/
 ```
 Clone the repositories:
 ```
 git clone https://github.com/Hubert26/swps_synchronization_study.git
-git clone https://github.com/Hubert26/python-utils.git
+git clone https://github.com/Hubert26/python-data-analysis-utils.git
 ```
 ### 2. Create and Activate the Environment
 + Navigate to the swps_synchronization_study project directory:
@@ -35,8 +35,8 @@ conda activate swps_synchronization_study_env
 ```
 
 ### Notes
-+ The `environment.yml` file ensures the `python-utils` package is installed with all required optional dependencies.
-+ Any changes to the `python-utils` project will reflect automatically in this setup because of the editable installation.
++ The `environment.yml` file ensures the `python-data-analysis-utils` package is installed with all required optional dependencies.
++ Any changes to the `python-data-analysis-utils` project will reflect automatically in this setup because of the editable installation.
 
 ## Key Features
 **Project Workflow**

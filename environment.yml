@@ -6,8 +6,8 @@ dependencies:
   - pandas
   - pip
   - pip:
-      - ../python-utils[plotly]
-      - ../python-utils[matplotlib]
-      - ../python-utils[dataframe]
-      - ../python-utils[math_signals]
+      - ../python-data-analysis-utils[plotly]
+      - ../python-data-analysis-utils[matplotlib]
+      - ../python-data-analysis-utils[dataframe]
+      - ../python-data-analysis-utils[math_signals]
 
