@@ -1,7 +1,9 @@
 # Signal Data Processing and Correlation Analysis
 ___
 ## Project Overview
-This project focuses on the analysis of signal data by calculating weighted correlations between pairs of measurements, with a special emphasis on heart rate signals. The methodology includes data loading, filtering, merging, and aligning of signals to assess the relationships between time-shifted measurements across various intervals.
+This project focuses on the analysis of heart rate (HR) data collected using the Polar H10 chest strap and the Elite HRV mobile app. The Polar H10 is a high-precision heart rate monitor, while the Elite HRV app provides tools for tracking HR variability and overall health.
+
+The core objective is to analyze heart rate signals by calculating weighted correlations between pairs of measurements. The workflow includes data preprocessing steps such as loading, filtering, merging, and aligning signals to evaluate relationships between time-shifted measurements across various intervals.
 
 ## Installation
 
