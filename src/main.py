@@ -6,7 +6,11 @@ Created on Wed Nov  8 10:45:31 2023
 """
 
 from config import *
-from functions import *
+from correlation_functions import *
+from data_management_functions import *
+from charts_functions import *
+from metrics_functions import *
+
 from utils.dataframe_utils import write_to_excel
 from utils.file_utils import list_file_paths
 #%%
@@ -54,15 +58,13 @@ if __name__ == '__main__':
 #%%
     #Ploting
 
-# =============================================================================
-#     #Ploting full measurements
-#     meas_plot_from(rr_list, folder_name="rr_meas", title_label="RR-intervals", value_label="Time Between Heartbeats [ms]")
-#     pair_plots_from(rr_list, folder_name="rr_pairs", title_label="paired RR-intervals", value_label="Time Between Heartbeats [ms]")
-#     pair_plots_from(nn_list, folder_name="nn_pairs", title_label="paired NN-intervals", value_label="Time Between Heartbeats [ms]")
-#     pair_plots_from(hr_list, folder_name="hr_pairs", title_label="paired Heart Rate", value_label="Heart Rate [bpm]")
-#     pair_plots_from(sdnn_list, folder_name="sdnn_pairs", title_label="paired Standard Deviation of NN-intervals", value_label="SDNN [ms]")
-#     pair_plots_from(rmssd_list, folder_name="rmssd_pairs", title_label="paired Root Mean Square of Successive Differences of NN-intervals", value_label="RMSSD [ms]")
-# =============================================================================
+    #Ploting full measurements
+    meas_plot_from(rr_list, folder_name="rr_meas", title_label="RR-intervals", value_label="Time Between Heartbeats [ms]")
+    pair_plots_from(rr_list, folder_name="rr_pairs", title_label="paired RR-intervals", value_label="Time Between Heartbeats [ms]")
+    pair_plots_from(nn_list, folder_name="nn_pairs", title_label="paired NN-intervals", value_label="Time Between Heartbeats [ms]")
+    pair_plots_from(hr_list, folder_name="hr_pairs", title_label="paired Heart Rate", value_label="Heart Rate [bpm]")
+    pair_plots_from(sdnn_list, folder_name="sdnn_pairs", title_label="paired Standard Deviation of NN-intervals", value_label="SDNN [ms]")
+    pair_plots_from(rmssd_list, folder_name="rmssd_pairs", title_label="paired Root Mean Square of Successive Differences of NN-intervals", value_label="RMSSD [ms]")
 
 #%%
 # =============================================================================
