@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 
 from config import *
 from classes import *
-from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly, create_heatmap_plotly
+
+from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
 from utils.file_utils import read_text_file, extract_file_name
 from utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
 from utils.signal_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, overlapping_sd, overlapping_rmssd
@@ -772,9 +773,14 @@ def filter_rr_meas(meas_list: list['Meas'], sd_threshold: float = 3, threshold_f
         new_x_data = np.cumsum(filtered_y_data)
         
         # Step 5: Update the Meas object with new x_data, filtered y_data, and updated end time
-        meas.update(new_x_data=new_x_data,
-                    new_y_data=filtered_y_data,
-                    new_endtime=meas.metadata.starttime + timedelta(milliseconds=new_x_data[-1]))
+        meas.data.update(
+            x_data=new_x_data,
+            y_data=filtered_y_data
+            )
+        
+        meas.metadata.update(
+            endtime=meas.metadata.starttime + timedelta(milliseconds=new_x_data[-1])
+            )
                 
         # Add the processed Meas object to the filtered list
         filtered_meas_list.append(meas)
@@ -897,8 +903,8 @@ def interp_meas_pair_uniform_time(meas_pair: tuple['Meas', 'Meas'], ix_step: int
     ix, interpolated_signals = interp_signals_uniform_time(signals, ix_step=ix_step)
 
     # Update the Meas objects with interpolated x_data and y_data
-    meas1.update_data(new_x_data=ix, new_y_data=interpolated_signals[0])
-    meas2.update_data(new_x_data=ix, new_y_data=interpolated_signals[1])
+    meas1.data.update(x_data=ix, y_data=interpolated_signals[0])
+    meas2.data.update(x_data=ix, y_data=interpolated_signals[1])
 
     # Return the updated Meas objects
     return meas1, meas2
@@ -1286,17 +1292,8 @@ def records_to_dataframe(measurement_records: list[MeasurementRecord]):
     Returns:
         DataFrame: A DataFrame containing non-Meas attributes as columns.
     """
-    # List to store rows for the DataFrame
-    data_for_df = []
-
-    for record in measurement_records:
-        # Extract attributes into a dictionary, excluding Meas objects
-        record_dict = record.__dict__.copy()  # Get all attributes of the record
-        record_dict.pop('meas1', None)  # Remove meas1
-        record_dict.pop('meas2', None)  # Remove meas2
-        
-        # Append the remaining data to the list
-        data_for_df.append(record_dict)
+    # Use the to_dict method to convert each record to a dictionary
+    data_for_df = [record.to_dict() for record in measurement_records]
     
     # Convert the data to a DataFrame
     df = pd.DataFrame(data_for_df)
@@ -1371,7 +1368,7 @@ def instant_hr_meas(meas_list: list[Meas]):
         instant_hr = calculate_instant_hr(nn_intervals)
         
         # Update meas.data with the calculated instantaneous HR
-        meas.data.update(new_y_data=instant_hr)
+        meas.data.update(y_data=instant_hr)
     
     return instant_hr_meas_list
 
@@ -1414,7 +1411,14 @@ def calculate_overlapping_sd(meas: Meas, window_ms: float, overlap: float, min_f
     new_endtime = meas.metadata.starttime + timedelta(milliseconds=last_window_center)
     
     # Update the Meas object with the new time (x_data), new standard deviation (y_data), and new endtime
-    meas.update(new_x_data=new_x_data, new_y_data=new_y_data, new_endtime=new_endtime)
+    meas.data.update(
+        x_data=new_x_data,
+        y_data=new_y_data
+        )
+        
+    meas.metadata.update(
+        endtime=new_endtime
+        )
 
 #%%
 def calculate_overlapping_sd_meas(meas_list: list[Meas], window_ms: float, overlap: float, min_fraction: float) -> list[Meas]:
@@ -1499,7 +1503,13 @@ def calculate_overlapping_rmssd(meas: Meas, window_ms: float, overlap: float, mi
     new_endtime = meas.metadata.starttime + timedelta(milliseconds=last_window_center)
     
     # Update the Meas object with the new time (x_data), new RMSSD (y_data), and new endtime
-    meas.update(new_x_data=new_x_data, new_y_data=new_y_data, new_endtime=new_endtime)
+    meas.data.update(
+        x_data=new_x_data,
+        y_data=new_y_data)
+    
+    meas.metadata.update(
+        endtime=new_endtime
+        )
 
 #%%
 def calculate_overlapping_rmssd_meas(meas_list: list[Meas], window_ms: float, overlap: float, min_fraction: float) -> list[Meas]:
