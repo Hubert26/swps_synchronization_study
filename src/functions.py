@@ -13,11 +13,11 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from scipy.stats import pearsonr, combine_pvalues, chi2
 import matplotlib.pyplot as plt
-import attr
 
 from config import *
 from classes import *
-from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly, create_heatmap_plotly
+
+from utils.plotly_utils import save_html_plotly, create_multi_series_scatter_plot_plotly, create_multi_series_histogram_plotly
 from utils.file_utils import read_text_file, extract_file_name
 from utils.string_utils import extract_numeric_suffix, extract_numeric_prefix, remove_digits
 from utils.signal_utils import filter_values_by_sd, filter_values_by_relative_mean, interpolate_missing_values, interp_signals_uniform_time, validate_array, overlapping_sd, overlapping_rmssd
