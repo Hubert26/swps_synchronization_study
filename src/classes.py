@@ -264,6 +264,18 @@ class MeasurementRecord:
     meas1: Meas = attr.field(validator=attr.validators.instance_of(Meas))
     meas2: Meas = attr.field(validator=attr.validators.instance_of(Meas))
 
+    def to_dict(self) -> dict:
+            """
+            Returns a dictionary representation of the MeasurementRecord,
+            excluding the Meas objects.
+    
+            Returns:
+                dict: Dictionary with attributes of MeasurementRecord.
+            """
+            record_dict = attr.asdict(self, recurse=False)  # Get dictionary without recursion
+            record_dict.pop("meas1", None)  # Exclude Meas objects
+            record_dict.pop("meas2", None)
+            return record_dict
 
 #%%
 if __name__ == '__main__':

@@ -1292,18 +1292,8 @@ def records_to_dataframe(measurement_records: list[MeasurementRecord]):
     Returns:
         DataFrame: A DataFrame containing non-Meas attributes as columns.
     """
-    # List to store rows for the DataFrame
-    data_for_df = []
-
-    for record in measurement_records:
-        # Extract attributes into a dictionary, excluding Meas objects
-        # Use attr.asdict to convert the record to a dictionary
-        record_dict = attr.asdict(record, recurse=False)  # Avoid recursion into Meas objects
-        record_dict.pop('meas1', None)  # Remove meas1
-        record_dict.pop('meas2', None)  # Remove meas2
-        
-        # Append the remaining data to the list
-        data_for_df.append(record_dict)
+    # Use the to_dict method to convert each record to a dictionary
+    data_for_df = [record.to_dict() for record in measurement_records]
     
     # Convert the data to a DataFrame
     df = pd.DataFrame(data_for_df)
