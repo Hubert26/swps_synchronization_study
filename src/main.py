@@ -67,38 +67,30 @@ if __name__ == '__main__':
     pair_plots_from(rmssd_list, folder_name="rmssd_pairs", title_label="paired Root Mean Square of Successive Differences of NN-intervals", value_label="RMSSD [ms]")
 
 #%%
-# =============================================================================
-#     #Ploting interpolated measurmenents
-#     save_final_pairs_plots(best_nn_results, folder_name="nn_results", title_label="interpolated and paired NN-intervals", value_label="Time Between Heartbeats [ms]")
-#     save_final_pairs_plots(best_hr_results, folder_name="hr_results", title_label="interpolated and paired Heart Rate", value_label="Heart Rate [bpm]")
-#     save_final_pairs_plots(best_sdnn_results, folder_name="sdnn_results", title_label="interpolated and paired Standard Deviation of NN-intervals", value_label="SDNN [ms]")
-#     save_final_pairs_plots(best_rmssd_results, folder_name="rmssd_results", title_label="interpolated and paired Successive Differences of NN-intervals", value_label="RMSSD [ms]")
-# =============================================================================
+    #Ploting interpolated measurmenents
+    save_final_pairs_plots(best_nn_results, folder_name="nn_results", title_label="interpolated and paired NN-intervals", value_label="Time Between Heartbeats [ms]")
+    save_final_pairs_plots(best_hr_results, folder_name="hr_results", title_label="interpolated and paired Heart Rate", value_label="Heart Rate [bpm]")
+    save_final_pairs_plots(best_sdnn_results, folder_name="sdnn_results", title_label="interpolated and paired Standard Deviation of NN-intervals", value_label="SDNN [ms]")
+    save_final_pairs_plots(best_rmssd_results, folder_name="rmssd_results", title_label="interpolated and paired Successive Differences of NN-intervals", value_label="RMSSD [ms]")
     
 #%%
-# =============================================================================
-#     #Ploting corr heatmaps
-#     save_corr_heatmap_by_pair_and_shift(nn_results_df, folder_name="nn_results", title_label="Correlation heatmap of shifted NN-intervals")
-#     save_corr_heatmap_by_pair_and_shift(hr_results_df, folder_name="hr_results", title_label="Correlation heatmap of shifted Heart Rate")
-#     save_corr_heatmap_by_pair_and_shift(sdnn_results_df, folder_name="sdnn_results", title_label="Correlation heatmap of shifted Standard Deviation of NN-intervals")
-#     save_corr_heatmap_by_pair_and_shift(rmssd_results_df, folder_name="rmssd_results", title_label="Correlation heatmap of shifted Successive Differences of NN-intervals")
-# 
-# =============================================================================
-#%%
-# =============================================================================
-#     #Ploting corr heatmaps
-#     save_corr_heatmap_by_task_and_shift(nn_results_df, folder_name="nn_results", title_label="Correlation heatmap of shifted NN-intervals")
-#     save_corr_heatmap_by_task_and_shift(hr_results_df, folder_name="hr_results", title_label="Correlation heatmap of shifted Heart Rate")
-#     save_corr_heatmap_by_task_and_shift(sdnn_results_df, folder_name="sdnn_results", title_label="Correlation heatmap of shifted Standard Deviation of NN-intervals")
-#     save_corr_heatmap_by_task_and_shift(rmssd_results_df, folder_name="rmssd_results", title_label="Correlation heatmap of shifted Successive Differences of NN-intervals")
-# =============================================================================
+    #Ploting corr heatmaps
+    save_corr_heatmap_by_pair_and_shift(nn_results_df, folder_name="nn_results", title_label="Correlation heatmap of shifted NN-intervals")
+    save_corr_heatmap_by_pair_and_shift(hr_results_df, folder_name="hr_results", title_label="Correlation heatmap of shifted Heart Rate")
+    save_corr_heatmap_by_pair_and_shift(sdnn_results_df, folder_name="sdnn_results", title_label="Correlation heatmap of shifted Standard Deviation of NN-intervals")
+    save_corr_heatmap_by_pair_and_shift(rmssd_results_df, folder_name="rmssd_results", title_label="Correlation heatmap of shifted Successive Differences of NN-intervals")
 
 #%%
-# =============================================================================
-#     #Saveing corr results
-#     write_to_excel(best_nn_results_df, ANALYSIS_DATA_DIR / "nn_results.xlsx")  
-#     write_to_excel(best_hr_results_df, ANALYSIS_DATA_DIR / "hr_results.xlsx")
-#     write_to_excel(best_sdnn_results_df, ANALYSIS_DATA_DIR / "sdnn_results.xlsx")
-#     write_to_excel(best_rmssd_results_df, ANALYSIS_DATA_DIR / "rmssd_results.xlsx")
-# =============================================================================
+    #Ploting corr heatmaps
+    save_corr_heatmap_by_task_and_shift(nn_results_df, folder_name="nn_results", title_label="Correlation heatmap of shifted NN-intervals")
+    save_corr_heatmap_by_task_and_shift(hr_results_df, folder_name="hr_results", title_label="Correlation heatmap of shifted Heart Rate")
+    save_corr_heatmap_by_task_and_shift(sdnn_results_df, folder_name="sdnn_results", title_label="Correlation heatmap of shifted Standard Deviation of NN-intervals")
+    save_corr_heatmap_by_task_and_shift(rmssd_results_df, folder_name="rmssd_results", title_label="Correlation heatmap of shifted Successive Differences of NN-intervals")
+
+#%%
+    #Saveing corr results
+    write_to_excel(best_nn_results_df, ANALYSIS_DATA_DIR / "nn_results.xlsx")  
+    write_to_excel(best_hr_results_df, ANALYSIS_DATA_DIR / "hr_results.xlsx")
+    write_to_excel(best_sdnn_results_df, ANALYSIS_DATA_DIR / "sdnn_results.xlsx")
+    write_to_excel(best_rmssd_results_df, ANALYSIS_DATA_DIR / "rmssd_results.xlsx")
 

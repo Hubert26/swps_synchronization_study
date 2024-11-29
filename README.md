@@ -102,17 +102,23 @@ All correlation results are saved in an XLSX files for comprehensive analysis. H
 
 The project is organized into several directories and files, each serving a specific purpose to facilitate the synchronization study analysis. The main directory `src/` contains the source code and is subdivided into various modules:
 
-- `classes.py`: This file defines the core classes used throughout the project, including `Data`, `Metadata`, and `Meas`, which encapsulate the data structures necessary for managing the time signals data.
-
 - `main.py`: This is the entry point of the application where the main logic for data processing and analysis is executed.
 
-- `functions.py`: This file contains various functions used for data processing and analysis tasks that support the main application logic.
+- `classes.py`: This file defines the core classes used throughout the project.
 
-- `config.py`: This file houses configuration settings and constants used across the project.
+- `time_functions.py`: Groups functions for operations related to time management.
+
+- `data_management_functions.py`: Includes functions for handling and validating data.
+
+- `metrics_functions.py`: Provides functions for calculating NN, HR, SDNN, RMSSD.
+
+- `charts_functions.py`: Handles visualization and plotting of results.
+
+- `config.py`: Stores configuration settings and constants used across the project.
 
 - `anova_data_preparation.py`: This module is dedicated to preparing data specifically for ANOVA analysis.
 
-The `data/` directory contains subfolders for different types of measurement data, while the `results/` directory holds analysis results and generated plots. The `logs/` directory is used for logging messages during the execution of the code. Additionally, the root directory includes `environment.yml` for environment configuration, `.gitattributes` and `.gitignore` files for version control, and `README.md` for project documentation.
+The `data/` directory contains subfolders for different types of measurement data, while the `results/` directory holds analysis results and generated plots. The `logs/` directory is used for logging messages during the execution of the code. Additionally, the root directory includes `environment.yml` for environment configuration, `.gitattributes` and `.gitignore` files for version control, , `LICENCE.txt` for licensing and `README.md` for project documentation.
 
 ## Accessing Results
 
