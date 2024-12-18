@@ -13,46 +13,60 @@ import re
 from config import *
 from utils.dataframe_utils import read_excel_file, write_to_excel
 
-#%%
+# %%
+# Define a variable to choose between spearman results and pearson results
+corr_name = "spearman"  # Options: "spearman", "person"
+# Define a variable to choose between best results and all results
+result_choice = "best"  # Options: "best", "all"
+
 regex_patterns = {
-    'meas_number': r'^(1|2)',
-    'condition': r'_(C|R)_',
-    'task': r'_(baseline1|baseline2|z\d(?:_\d_[fm])?)_',
-    'value_name': r'_(CORR|SHIFT)_',
-    'measure_type': r'_(HR|SDNN|RMSSD)$'
+    "meas_number": r"^(1|2)",
+    "condition": r"_(C|R)_",
+    "task": r"_(baseline1|baseline2|z\d(?:_\d_[fm])?)_",
+    "value_name": r"_(CORR|SHIFT)_",
+    "measure_type": r"_(HR|SDNN|RMSSD)$",
 }
 
 task_order = [
     "baseline1",
     "z",
-    "z1", "z1_1_f", "z1_2_m", "z1_3_f", "z1_4_m", "z1_5_f", "z1_6_m",
-    "z2", "z2_1_m", "z2_2_f", "z2_3_m", "z2_4_f", "z2_5_m", "z2_6_f",
-    "baseline2"
+    "z1",
+    "z1_1_f",
+    "z1_2_m",
+    "z1_3_f",
+    "z1_4_m",
+    "z1_5_f",
+    "z1_6_m",
+    "z2",
+    "z2_1_m",
+    "z2_2_f",
+    "z2_3_m",
+    "z2_4_f",
+    "z2_5_m",
+    "z2_6_f",
+    "baseline2",
 ]
 
-sorting_rules = {
-    'meas_number': ['1', '2'],
-    'condition': ['R', 'C'],
-    'task': task_order
-}
+sorting_rules = {"meas_number": ["1", "2"], "condition": ["R", "C"], "task": task_order}
 
-#%%
+
+# %%
 def extract_column_parts(df: pd.DataFrame, patterns: dict) -> pd.DataFrame:
     """
     Splits column names into parts based on specified regex patterns.
-    
+
     Parameters:
     - df (pd.DataFrame): The DataFrame whose column names need to be split.
     - patterns (dict): A dictionary with regex patterns for each part to extract.
                        Keys represent the part name, values contain regex strings.
-    
+
     Returns:
-    - pd.DataFrame: A DataFrame with columns representing extracted parts from the 
+    - pd.DataFrame: A DataFrame with columns representing extracted parts from the
                     original column names in `df`.
     """
     # Create a DataFrame to store the separated parts of column names
     parts_df = pd.DataFrame(index=df.columns)
-    
+
     # Apply each regex pattern to extract parts of column names
     for part, pattern in patterns.items():
         # Find all matches for the regex pattern
@@ -60,41 +74,48 @@ def extract_column_parts(df: pd.DataFrame, patterns: dict) -> pd.DataFrame:
 
         # Extract the first match for each column or set as None if no match is found
         parts_df[part] = [x[0] if len(x) > 0 else None for x in parts]
-    
+
     return parts_df
 
-#%%
-def sort_columns_by_rules(df: pd.DataFrame, patterns: dict, sorting_rules: dict) -> pd.DataFrame:
+
+# %%
+def sort_columns_by_rules(
+    df: pd.DataFrame, patterns: dict, sorting_rules: dict
+) -> pd.DataFrame:
     """
     Sorts columns in the DataFrame based on extracted parts from column names and sorting rules.
-    
+
     Parameters:
     - df (pd.DataFrame): The DataFrame with columns to be sorted.
-    - patterns (dict): A dictionary where keys are part names and values are regex patterns 
+    - patterns (dict): A dictionary where keys are part names and values are regex patterns
                        to extract those parts from the column names.
-    - sorting_rules (dict): A dictionary specifying the order for each extracted part. 
-                            Keys represent part names, and values are lists with the 
+    - sorting_rules (dict): A dictionary specifying the order for each extracted part.
+                            Keys represent part names, and values are lists with the
                             desired sort order for that part.
-    
+
     Returns:
     - pd.DataFrame: A DataFrame with columns sorted according to the specified rules in `sorting_rules`.
     """
     # Extract parts of column names using specified regex patterns
     parts_df = extract_column_parts(df, patterns)
-    parts_df['original_column'] = df.columns  # Store original column names for reordering
+    parts_df["original_column"] = (
+        df.columns
+    )  # Store original column names for reordering
 
     # Apply sorting rules for each part based on provided order lists
     for col_name, order in sorting_rules.items():
-        parts_df[col_name] = pd.Categorical(parts_df[col_name], categories=order, ordered=True)
-    
+        parts_df[col_name] = pd.Categorical(
+            parts_df[col_name], categories=order, ordered=True
+        )
+
     # Sort parts_df based on sorting rules to get the correct column order
     sorted_parts_df = parts_df.sort_values(list(sorting_rules.keys()))
-    
+
     # Reorder columns in the original DataFrame based on sorted column names
-    return df[sorted_parts_df['original_column'].values]
+    return df[sorted_parts_df["original_column"].values]
 
 
-#%%
+# %%
 def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
     """
     Processes the input DataFrame to extract measurement types, pairs, and
@@ -107,13 +128,21 @@ def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
 
     Returns:
     - pd.DataFrame: Processed DataFrame with pivoted columns and combined names.
-    
+
     Raises:
     - ValueError: If required columns are not present in the DataFrame.
     """
 
     # Check if necessary columns are present in the DataFrame
-    required_columns = ['name_meas1', 'name_meas2', 'meas_number', 'condition', 'pair_number', 'task', value]
+    required_columns = [
+        "name_meas1",
+        "name_meas2",
+        "meas_number",
+        "condition",
+        "pair_number",
+        "task",
+        value,
+    ]
     for column in required_columns:
         if column not in df.columns:
             raise ValueError(f"Missing required column: {column}")
@@ -121,78 +150,117 @@ def process_measurement_data(df: pd.DataFrame, value: str) -> pd.DataFrame:
     df = copy.deepcopy(df)
 
     # Convert 'pair' to numeric type
-    df['pair_number'] = df['pair_number'].astype(int)
+    df["pair_number"] = df["pair_number"].astype(int)
 
     # Create a pivot table based on the specified value
-    result = df.pivot_table(index='pair_number', 
-                             columns=['meas_number', 'condition', 'task'], 
-                             values=value,  # Use 'value' as specified to pull correct column data
-                             aggfunc='first')  # Use 'first' or another aggregation function as needed
+    result = df.pivot_table(
+        index="pair_number",
+        columns=["meas_number", "condition", "task"],
+        values=value,  # Use 'value' as specified to pull correct column data
+        aggfunc="first",
+    )  # Use 'first' or another aggregation function as needed
 
     # Reset index to convert the pivot table back to a DataFrame
     result = result.reset_index()
 
     # Combine the columns into a single name using underscore as a separator
-    result.columns = ['pair_number'] + ['_'.join(map(str, col)) for col in result.columns[1:]]
+    result.columns = ["pair_number"] + [
+        "_".join(map(str, col)) for col in result.columns[1:]
+    ]
 
     return result
 
-#%%
-if __name__ == '__main__':
-    
-# =============================================================================
-#     # Read and process NN results
-#     nn_results = read_excel_file(RESULTS_DIR / "analysis_data" / "nn_results.xlsx")
-#     nn_corr_processed_data = process_measurement_data(nn_results, 'corr')
-#     nn_shift_processed_data = process_measurement_data(nn_results, 'shift_diff')
-#     nn_anova_data = nn_corr_processed_data.merge(nn_shift_processed_data, on='pair_number', suffixes=('_CORR', '_SHIFT'))
-# =============================================================================
-    
+
+# %%
+if __name__ == "__main__":
+    # =============================================================================
+    #     # Read and process NN results
+    #     nn_results = read_excel_file(RESULTS_DIR / "analysis_data" / "nn_results.xlsx")
+    #     nn_corr_processed_data = process_measurement_data(nn_results, 'corr')
+    #     nn_shift_processed_data = process_measurement_data(nn_results, 'shift_diff')
+    #     nn_anova_data = nn_corr_processed_data.merge(nn_shift_processed_data, on='pair_number', suffixes=('_CORR', '_SHIFT'))
+    # =============================================================================
+
     # Read and process HR results
-    hr_results = read_excel_file(RESULTS_DIR / "analysis_data" / "hr_results.xlsx")
-    hr_corr_processed_data = process_measurement_data(hr_results, 'corr')
-    hr_shift_processed_data = process_measurement_data(hr_results, 'shift_diff')
-    hr_anova_data = hr_corr_processed_data.merge(hr_shift_processed_data, on='pair_number', suffixes=('_CORR', '_SHIFT'))
-    hr_anova_data.set_index('pair_number', inplace=True)
-    hr_anova_data = hr_anova_data.add_suffix('_HR')
-    
+    hr_results = read_excel_file(
+        RESULTS_DIR
+        / "analysis_data"
+        / corr_name
+        / str(result_choice + "_hr_results.xlsx")
+    )
+    hr_corr_processed_data = process_measurement_data(hr_results, "corr")
+    hr_shift_processed_data = process_measurement_data(hr_results, "shift_diff")
+    hr_anova_data = hr_corr_processed_data.merge(
+        hr_shift_processed_data, on="pair_number", suffixes=("_CORR", "_SHIFT")
+    )
+    hr_anova_data.set_index("pair_number", inplace=True)
+    hr_anova_data = hr_anova_data.add_suffix("_HR")
+
     # Read and process SD results
-    sdnn_results = read_excel_file(RESULTS_DIR / "analysis_data" / "sdnn_results.xlsx")
-    sdnn_corr_processed_data = process_measurement_data(sdnn_results, 'corr')
-    sdnn_shift_processed_data = process_measurement_data(sdnn_results, 'shift_diff')
-    sdnn_anova_data = sdnn_corr_processed_data.merge(sdnn_shift_processed_data, on='pair_number', suffixes=('_CORR', '_SHIFT'))
-    sdnn_anova_data.set_index('pair_number', inplace=True)
-    sdnn_anova_data = sdnn_anova_data.add_suffix('_SDNN')
-    
+    sdnn_results = read_excel_file(
+        RESULTS_DIR
+        / "analysis_data"
+        / corr_name
+        / str(result_choice + "_sdnn_results.xlsx")
+    )
+    sdnn_corr_processed_data = process_measurement_data(sdnn_results, "corr")
+    sdnn_shift_processed_data = process_measurement_data(sdnn_results, "shift_diff")
+    sdnn_anova_data = sdnn_corr_processed_data.merge(
+        sdnn_shift_processed_data, on="pair_number", suffixes=("_CORR", "_SHIFT")
+    )
+    sdnn_anova_data.set_index("pair_number", inplace=True)
+    sdnn_anova_data = sdnn_anova_data.add_suffix("_SDNN")
+
     # Read and process RMSSD results
-    rmssd_results = read_excel_file(RESULTS_DIR / "analysis_data" / "rmssd_results.xlsx")
-    rmssd_corr_processed_data = process_measurement_data(rmssd_results, 'corr')
-    rmssd_shift_processed_data = process_measurement_data(rmssd_results, 'shift_diff')
-    rmssd_anova_data = rmssd_corr_processed_data.merge(rmssd_shift_processed_data, on='pair_number', suffixes=('_CORR', '_SHIFT'))
-    rmssd_anova_data.set_index('pair_number', inplace=True)
-    rmssd_anova_data = rmssd_anova_data.add_suffix('_RMSSD')
+    rmssd_results = read_excel_file(
+        RESULTS_DIR
+        / "analysis_data"
+        / corr_name
+        / str(result_choice + "_rmssd_results.xlsx")
+    )
+    rmssd_corr_processed_data = process_measurement_data(rmssd_results, "corr")
+    rmssd_shift_processed_data = process_measurement_data(rmssd_results, "shift_diff")
+    rmssd_anova_data = rmssd_corr_processed_data.merge(
+        rmssd_shift_processed_data, on="pair_number", suffixes=("_CORR", "_SHIFT")
+    )
+    rmssd_anova_data.set_index("pair_number", inplace=True)
+    rmssd_anova_data = rmssd_anova_data.add_suffix("_RMSSD")
 
     # Merge all anova dataframes on index
-    anova_data = hr_anova_data.merge(sdnn_anova_data, left_index=True, right_index=True, suffixes=('_HR', '_SDNN')) \
-                               .merge(rmssd_anova_data, left_index=True, right_index=True, suffixes=('', '_RMSSD'))
+    anova_data = hr_anova_data.merge(
+        sdnn_anova_data, left_index=True, right_index=True, suffixes=("_HR", "_SDNN")
+    ).merge(
+        rmssd_anova_data, left_index=True, right_index=True, suffixes=("", "_RMSSD")
+    )
 
     # Dropping columns with "R" and "SHIFT" in name
-    columns_to_drop = [col for col in anova_data.columns if "R" in col and "SHIFT" in col]
+    columns_to_drop = [
+        col for col in anova_data.columns if "R" in col and "SHIFT" in col
+    ]
     anova_data = anova_data.drop(columns=columns_to_drop)
     anova_data = sort_columns_by_rules(anova_data, regex_patterns, sorting_rules)
-    anova_data.reset_index(names='pair_number', inplace=True)
-#%%
-    write_to_excel(anova_data, ANALYSIS_DATA_DIR / "anova_data.xlsx")
-    
-#%%
+    anova_data.reset_index(names="pair_number", inplace=True)
+    # %%
+    write_to_excel(
+        anova_data,
+        ANALYSIS_DATA_DIR
+        / "ANOVA"
+        / str(corr_name + "_" + result_choice + "_anova_data.xlsx"),
+    )
+
+    # %%
     import openpyxl
     from openpyxl import Workbook
     from openpyxl.comments import Comment
-    
+
     # Load workbook and select the active sheet
-    wb = openpyxl.load_workbook(ANALYSIS_DATA_DIR / "anova_data.xlsx")
+    wb = openpyxl.load_workbook(
+        ANALYSIS_DATA_DIR
+        / "ANOVA"
+        / str(corr_name + "_" + result_choice + "_anova_data.xlsx")
+    )
     ws = wb.active
-    
+
     note = (
         "Variable Naming Convention:\n"
         "Each variable name in this dataset follows a structured format to specify its measurement details.\n"
@@ -233,27 +301,99 @@ if __name__ == '__main__':
         "    - 'SDNN' for Standard Deviation of NN-intervals\n"
         "    - 'RMSSD' for Root Mean Square of Successive Differences of NN-intervals\n"
     )
- 
+
     # Add the note as a comment to cell A1
     comment = Comment(note, "HS")
 
     # Estimate width and height based on text length
     # Each character approximates about 5 pixels in width, and each line about 20 pixels in height
-    approx_width = min(10000, max(1000, len(note) * 5 // 100))  # Width is capped between 300 and 800 points
-    approx_height = min(5000, max(1000, note.count('\n') * 20 + 100))  # Height is capped between 300 and 600 points
-    
+    approx_width = min(
+        10000, max(1000, len(note) * 5 // 100)
+    )  # Width is capped between 300 and 800 points
+    approx_height = min(
+        5000, max(1000, note.count("\n") * 20 + 100)
+    )  # Height is capped between 300 and 600 points
+
     # Set comment dimensions
     comment.width = approx_width
     comment.height = approx_height
 
     ws["A1"].comment = comment
-    
-    # Save the workbook
-    wb.save(ANALYSIS_DATA_DIR / "anova_data.xlsx")
-    
-    #%%
-    # Save the note to a text file
-    with open(ANALYSIS_DATA_DIR / "variable_naming_convention.txt", "w") as file:
-        file.write(note)
 
-       
+    # Save the workbook
+    wb.save(
+        ANALYSIS_DATA_DIR
+        / "ANOVA"
+        / str(corr_name + "_" + result_choice + "_anova_data.xlsx")
+    )
+
+    # %%
+    # # Save the note to a text file
+    # with open(ANALYSIS_DATA_DIR / "variable_naming_convention.txt", "w") as file:
+    #     file.write(note)
+
+# %%
+# Define the prefixes and suffixes for the results
+result_prefixes = ["best", "all"]
+corr_types = ["pearson", "spearman"]
+
+# Initialize empty lists to hold the merged DataFrames
+merged_best_results = []
+merged_all_results = []
+
+# Loop through each combination of prefix and correlation type for best results
+for prefix in ["best"]:
+    for corr_type in corr_types:
+        # Construct the file path
+        file_path = (
+            RESULTS_DIR
+            / "analysis_data"
+            / corr_type
+            / f"{prefix}_{corr_type}_results.xlsx"
+        )
+
+        # Read the Excel file
+        try:
+            results_df = read_excel_file(file_path)
+            merged_best_results.append((corr_type, results_df))
+        except FileNotFoundError:
+            print(f"File not found: {file_path}")
+
+# Merge the best results based on a common column, e.g., 'pair_number'
+if len(merged_best_results) > 1:
+    merged_best_df = merged_best_results[0][1]  # Start with the first DataFrame
+    for _, df in merged_best_results[1:]:
+        merged_best_df = merged_best_df.merge(
+            df, on="pair_number", suffixes=("", f"_{_}")
+        )
+# Save the merged best results to an Excel file
+write_to_excel(merged_best_df, ANALYSIS_DATA_DIR / "ANOVA" / "best_anova_data.xlsx")
+
+# Loop through each combination of prefix and correlation type for all results
+for prefix in ["all"]:
+    for corr_type in corr_types:
+        # Construct the file path
+        file_path = (
+            RESULTS_DIR
+            / "analysis_data"
+            / corr_type
+            / f"{prefix}_{corr_type}_results.xlsx"
+        )
+
+        # Read the Excel file
+        try:
+            results_df = read_excel_file(file_path)
+            merged_all_results.append((corr_type, results_df))
+        except FileNotFoundError:
+            print(f"File not found: {file_path}")
+
+# Merge the all results based on a common column, e.g., 'pair_number'
+if len(merged_all_results) > 1:
+    merged_all_df = merged_all_results[0][1]  # Start with the first DataFrame
+    for _, df in merged_all_results[1:]:
+        merged_all_df = merged_all_df.merge(
+            df, on="pair_number", suffixes=("", f"_{_}")
+        )
+
+# Save the merged all results to an Excel file
+write_to_excel(merged_all_df, ANALYSIS_DATA_DIR / "ANOVA" / "all_anova_data.xlsx")
