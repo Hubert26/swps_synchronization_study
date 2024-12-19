@@ -78,37 +78,37 @@ if __name__ == "__main__":
 
 
 # %%
-# Ploting corr heatmaps
-save_corr_heatmap_by_task_and_shift(
-    nn_results_df,
-    folder_name="nn_results",
-    title_label="Correlation heatmap of shifted NN-intervals",
-)
-save_corr_heatmap_by_task_and_shift(
-    hr_results_df,
-    folder_name="hr_results",
-    title_label="Correlation heatmap of shifted Heart Rate",
-)
-save_corr_heatmap_by_task_and_shift(
-    sdnn_results_df,
-    folder_name="sdnn_results",
-    title_label="Correlation heatmap of shifted Standard Deviation of NN-intervals",
-)
-save_corr_heatmap_by_task_and_shift(
-    rmssd_results_df,
-    folder_name="rmssd_results",
-    title_label="Correlation heatmap of shifted Successive Differences of NN-intervals",
-)
+# # Ploting corr heatmaps
+# save_corr_heatmap_by_task_and_shift(
+#     nn_results_df,
+#     folder_name="nn_results",
+#     title_label="Correlation heatmap of shifted NN-intervals",
+# )
+# save_corr_heatmap_by_task_and_shift(
+#     hr_results_df,
+#     folder_name="hr_results",
+#     title_label="Correlation heatmap of shifted Heart Rate",
+# )
+# save_corr_heatmap_by_task_and_shift(
+#     sdnn_results_df,
+#     folder_name="sdnn_results",
+#     title_label="Correlation heatmap of shifted Standard Deviation of NN-intervals",
+# )
+# save_corr_heatmap_by_task_and_shift(
+#     rmssd_results_df,
+#     folder_name="rmssd_results",
+#     title_label="Correlation heatmap of shifted Successive Differences of NN-intervals",
+# )
 
-# %%
-# Saveing corr results
-write_to_excel(nn_results_df, ANALYSIS_DATA_DIR / "nn_results.xlsx")
-write_to_excel(hr_results_df, ANALYSIS_DATA_DIR / "hr_results.xlsx")
-write_to_excel(sdnn_results_df, ANALYSIS_DATA_DIR / "sdnn_results.xlsx")
-write_to_excel(rmssd_results_df, ANALYSIS_DATA_DIR / "rmssd_results.xlsx")
-# %%
-# Saveing corr results
-write_to_excel(best_nn_results_df, ANALYSIS_DATA_DIR / "best_nn_results.xlsx")
-write_to_excel(best_hr_results_df, ANALYSIS_DATA_DIR / "best_hr_results.xlsx")
-write_to_excel(best_sdnn_results_df, ANALYSIS_DATA_DIR / "best_sdnn_results.xlsx")
-write_to_excel(best_rmssd_results_df, ANALYSIS_DATA_DIR / "best_rmssd_results.xlsx")
+# # %%
+# # Saveing all corr results
+# write_to_excel(nn_results_df, ANALYSIS_DATA_DIR / "nn_results.xlsx")
+# write_to_excel(hr_results_df, ANALYSIS_DATA_DIR / "hr_results.xlsx")
+# write_to_excel(sdnn_results_df, ANALYSIS_DATA_DIR / "sdnn_results.xlsx")
+# write_to_excel(rmssd_results_df, ANALYSIS_DATA_DIR / "rmssd_results.xlsx")
+# # %%
+# # Saveing best corr results
+# write_to_excel(best_nn_results_df, ANALYSIS_DATA_DIR / "best_nn_results.xlsx")
+# write_to_excel(best_hr_results_df, ANALYSIS_DATA_DIR / "best_hr_results.xlsx")
+# write_to_excel(best_sdnn_results_df, ANALYSIS_DATA_DIR / "best_sdnn_results.xlsx")
+# write_to_excel(best_rmssd_results_df, ANALYSIS_DATA_DIR / "best_rmssd_results.xlsx")
