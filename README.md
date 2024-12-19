@@ -116,7 +116,9 @@ The project is organized into several directories and files, each serving a spec
 
 - `config.py`: Stores configuration settings and constants used across the project.
 
-- `anova_data_preparation.py`: This module is dedicated to preparing data specifically for ANOVA analysis.
+The `notebooks/` directory contains Jupyter notebooks for experimenting and things that don't need to be in the main code.
+
+- `anova_data_preparation.ipynb`: This notebook is dedicated to preparing data specifically for ANOVA analysis.
 
 The `data/` directory contains subfolders for different types of measurement data, while the `results/` directory holds analysis results and generated plots. The `logs/` directory is used for logging messages during the execution of the code. Additionally, the root directory includes `environment.yml` for environment configuration, `.gitattributes` and `.gitignore` files for version control, , `LICENCE.txt` for licensing and `README.md` for project documentation.
 
